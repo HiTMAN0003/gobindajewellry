@@ -89,7 +89,7 @@ const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET
 
 /** True when federated sign-in is active (real auth is enforced). */
 export const authConfigured =
-  !authDisabled && Boolean(grokClientId && grokClientSecret);
+  !authDisabled && (emailAndPasswordEnabled || Boolean(grokClientId && grokClientSecret));
 
 // This app's own Better Auth origin. When deployed the deployer injects the
 // public URL. In the sandbox live preview there's no fixed URL (each preview gets
