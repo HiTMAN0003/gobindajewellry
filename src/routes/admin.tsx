@@ -1037,6 +1037,7 @@ function JewelleryForm({
 
 function BackupPanel({ onRestored }: { onRestored: (store: { items: Jewellery[]; rates: MetalRates; settings: StoreSettings; categories: string[]; categoryIcons?: Record<string, string>; categoryShown?: Record<string, boolean> }) => void }) {
   const [busy, setBusy] = useState<"down" | "up" | null>(null);
+  const [uploadProgress, setUploadProgress] = useState("");
 
   async function authHeaders(): Promise<HeadersInit> {
     const token = getBearerToken();
@@ -1067,19 +1068,85 @@ function BackupPanel({ onRestored }: { onRestored: (store: { items: Jewellery[];
 
   async function restoreBackup(file: File) {
     if (!confirm("Restore this backup? Current jewellery, banner, profile and rates will be replaced. Uploads stay in the same media store.")) return;
+
     setBusy("up");
+    setUploadProgress("Starting upload…");
+
+    let uploadId = "";
+
     try {
-      const body = new FormData();
-      body.append("file", file);
-      const res = await fetch("/api/backup", { method: "POST", headers: await authHeaders(), body });
-      if (!res.ok) throw new Error((await res.text()) || "Could not restore backup.");
+      const chunkSize = 1_000_000;
+      const totalChunks = Math.ceil(file.size / chunkSize);
+
+      const startRes = await fetch("/api/backup-upload?action=start", {
+        method: "POST",
+        headers: {
+          ...(await authHeaders()),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ size: file.size, chunks: totalChunks }),
+      });
+
+      if (!startRes.ok) throw new Error((await startRes.text()) || "Could not start upload.");
+
+      const started = await startRes.json() as { uploadId: string };
+      uploadId = started.uploadId;
+
+      for (let index = 0; index < totalChunks; index++) {
+        setUploadProgress(`Uploading part ${index + 1} of ${totalChunks}…`);
+
+        const chunk = file.slice(index * chunkSize, Math.min((index + 1) * chunkSize, file.size));
+        const headers = new Headers(await authHeaders());
+        headers.set("Content-Type", "application/octet-stream");
+
+        const chunkRes = await fetch(
+          `/api/backup-upload?action=chunk&uploadId=${encodeURIComponent(uploadId)}&index=${index}`,
+          {
+            method: "POST",
+            headers,
+            body: chunk,
+          }
+        );
+
+        if (!chunkRes.ok) throw new Error((await chunkRes.text()) || `Upload part ${index + 1} failed.`);
+      }
+
+      setUploadProgress("Restoring backup…");
+
+      const finishRes = await fetch("/api/backup-upload?action=finish", {
+        method: "POST",
+        headers: {
+          ...(await authHeaders()),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ uploadId }),
+      });
+
+      if (!finishRes.ok) throw new Error((await finishRes.text()) || "Could not restore backup.");
+
+      uploadId = "";
       const store = await getStorefront();
       onRestored(store);
       toast.success("Backup restored");
     } catch (err) {
+      if (uploadId) {
+        try {
+          await fetch("/api/backup-upload?action=abort", {
+            method: "POST",
+            headers: {
+              ...(await authHeaders()),
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ uploadId }),
+          });
+        } catch {
+          // Expired uploads are cleaned up automatically.
+        }
+      }
       toast.error(err instanceof Error ? err.message : "Could not restore backup");
     } finally {
       setBusy(null);
+      setUploadProgress("");
     }
   }
 
@@ -1109,6 +1176,9 @@ function BackupPanel({ onRestored }: { onRestored: (store: { items: Jewellery[];
           />
         </label>
       </div>
+      {uploadProgress && (
+        <p className="mt-4 text-sm text-ivory-dim">{uploadProgress}</p>
+      )}
     </section>
   );
 }
