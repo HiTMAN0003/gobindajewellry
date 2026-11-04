@@ -10,7 +10,7 @@ import { MenuHouse } from "./profile-section";
 import { WhatsAppButton } from "./whatsapp";
 
 const NAV = [
-  { href: "/#home", label: "Home" },
+  { href: "/#top", label: "Home" },
   { href: "/#gallery", label: "Gallery" },
 ];
 

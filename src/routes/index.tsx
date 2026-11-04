@@ -94,7 +94,7 @@ function Home() {
   }, [items]);
 
   return (
-    <main>
+    <main id="top">
       <SiteHeader rates={rates} profile={settings} />
       <HeroCarousel images={settings.heroImages} />
       <Gallery items={items} categories={categories} categoryIcons={categoryIcons} categoryShown={categoryShown} onOpen={(item) => openPiece(item, 0)} />

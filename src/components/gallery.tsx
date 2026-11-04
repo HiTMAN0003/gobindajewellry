@@ -144,7 +144,7 @@ export function Gallery({
   const looking = pool.interpreted.trim().toLowerCase() !== query.trim().toLowerCase() ? pool.interpreted : "";
 
   return (
-    <section id="gallery" className="py-8 md:py-10">
+    <section id="gallery" className="scroll-mt-24 py-8 md:py-10">
       <div className="wrap">
         <Reveal className="mb-4">
           <p className="label kicker mb-1">collection</p>
