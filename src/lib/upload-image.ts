@@ -52,13 +52,72 @@ async function fileToDataUrl(file: File): Promise<string> {
   }
 }
 
+async function fileToWebpThumb(file: File): Promise<string | undefined> {
+  let source: CanvasImageSource;
+  let width = 0;
+  let height = 0;
+  let bitmap: ImageBitmap | undefined;
+  let objectUrl: string | undefined;
+
+  try {
+    if (typeof createImageBitmap === "function") {
+      try {
+        bitmap = await createImageBitmap(file);
+        source = bitmap;
+        width = bitmap.width;
+        height = bitmap.height;
+      } catch {
+        bitmap = undefined;
+      }
+    }
+
+    if (!bitmap) {
+      objectUrl = URL.createObjectURL(file);
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("Could not open photo."));
+        el.src = objectUrl!;
+      });
+      source = img;
+      width = img.naturalWidth || img.width;
+      height = img.naturalHeight || img.height;
+    }
+
+    const size = fit(width, height, 480);
+    const canvas = document.createElement("canvas");
+    canvas.width = size.width;
+    canvas.height = size.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return undefined;
+
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, size.width, size.height);
+    ctx.drawImage(source!, 0, 0, size.width, size.height);
+
+    const result = canvas.toDataURL("image/webp", 0.68);
+    if (!result.startsWith("data:image/webp;base64,") || result.length > 600_000) {
+      return undefined;
+    }
+    return result;
+  } catch {
+    return undefined;
+  } finally {
+    bitmap?.close();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export async function uploadStudioPhoto(file: File): Promise<string> {
   if (file.type && !file.type.startsWith("image/")) {
     throw new Error("Please choose a photo.");
   }
-  const dataUrl = await fileToDataUrl(file);
+  const [dataUrl, thumbDataUrl] = await Promise.all([
+    fileToDataUrl(file),
+    fileToWebpThumb(file),
+  ]);
   if (!dataUrl.startsWith("data:image/")) throw new Error("Could not read that photo.");
-  const saved = await saveMedia({ data: { dataUrl } });
+  const saved = await saveMedia({ data: { dataUrl, thumbDataUrl } });
   if (!saved?.url) throw new Error("Could not store that photo.");
   return saved.url;
 }

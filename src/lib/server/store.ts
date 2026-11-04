@@ -65,16 +65,33 @@ function mapItem(row: Record<string, unknown>): Jewellery {
   };
 }
 
-async function storeDataUrl(dataUrl: string): Promise<string> {
+async function storeDataUrl(dataUrl: string, thumbDataUrl?: string): Promise<string> {
   const m = dataUrl.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/i);
   if (!m) throw new Error("Please upload a JPEG or PNG photo.");
   const mime = m[1].toLowerCase() === "image/jpg" ? "image/jpeg" : m[1].toLowerCase();
   const body = m[2].replace(/\s/g, "");
   if (body.length < 80) throw new Error("That photo is empty.");
   if (body.length > 2_400_000) throw new Error("That photo is too large. Try a smaller image.");
+
+  let thumbBody: string | null = null;
+  let thumbMime: string | null = null;
+  if (thumbDataUrl) {
+    const thumb = thumbDataUrl.match(/^data:image\/webp;base64,([A-Za-z0-9+/=\s]+)$/i);
+    if (!thumb) throw new Error("The thumbnail must be a WebP image.");
+    thumbBody = thumb[1].replace(/\s/g, "");
+    thumbMime = "image/webp";
+    if (thumbBody.length < 80 || thumbBody.length > 600_000) {
+      throw new Error("The WebP thumbnail is invalid or too large.");
+    }
+  }
+
   const id = `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   const sql = await getSql();
-  await sql.query(`insert into house_media (id, mime, body) values ($1, $2, $3)`, [id, mime, body]);
+  await sql.query(
+    `insert into house_media (id, mime, body, thumb_mime, thumb_body)
+     values ($1, $2, $3, $4, $5)`,
+    [id, mime, body, thumbMime, thumbBody],
+  );
   return `/api/media/${id}`;
 }
 
@@ -457,11 +474,14 @@ export const saveSettings = createServerFn({ method: "POST" })
 
 export const saveMedia = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ dataUrl: z.string().min(32).max(2_500_000) }))
+  .validator(z.object({
+    dataUrl: z.string().min(32).max(2_500_000),
+    thumbDataUrl: z.string().min(32).max(650_000).optional(),
+  }))
   .handler(async ({ data, context }) => {
     await ready();
     await requireStudio(context.userId);
-    const url = await storeDataUrl(data.dataUrl);
+    const url = await storeDataUrl(data.dataUrl, data.thumbDataUrl);
     return { url };
   });
 

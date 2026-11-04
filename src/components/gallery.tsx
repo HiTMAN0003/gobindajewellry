@@ -44,6 +44,9 @@ function JewelCard({
   const slotRef = useRef<HTMLSpanElement>(null);
   const [srcOn, setSrcOn] = useState(ahead || eager);
   const src = item.images[0];
+  const displaySrc = src?.startsWith("/api/media/")
+    ? `${src}?size=thumb`
+    : src;
 
   useEffect(() => {
     if (srcOn) return;
@@ -66,7 +69,7 @@ function JewelCard({
       {src ? (
         srcOn ? (
           <img
-            src={src}
+            src={displaySrc}
             alt={item.name}
             className="block w-full"
             loading={eager ? "eager" : "lazy"}
