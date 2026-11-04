@@ -1143,7 +1143,7 @@ function StudioUsers({
     <section className="surface p-6 md:p-8">
       <h2 className="font-display text-2xl">Studio users</h2>
       <p className="mt-1 text-sm text-ivory-dim">
-        House admin is pavitrasanatan@gmail.com. Invite others with Google. You can remove anyone except the house admin.
+        House admin is pavitrasanatan@gmail.com. Invite a person by email. They create their own password using that invited email, then sign in with email and password. You can remove anyone except the house admin.
       </p>
       <form className="mt-6 flex flex-wrap gap-3" onSubmit={onSubmit}>
         <input className="field max-w-sm" type="email" required placeholder="email@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />

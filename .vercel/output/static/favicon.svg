@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Gobinda Jewellers">
-  <rect width="32" height="32" rx="7" fill="#0b0a08"/>
-  <rect x="1.5" y="1.5" width="29" height="29" rx="5.5" fill="none" stroke="#c9a45c" stroke-width="1.75"/>
-  <path fill="#c9a45c" d="M25.4 12.58A10 10 0 1 0 25.4 19.42L21.17 17.88A5.5 5.5 0 1 1 21.17 14.12Z"/>
-  <rect x="15.5" y="14.5" width="10.5" height="3" fill="#c9a45c"/>
-</svg>

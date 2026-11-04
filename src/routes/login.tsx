@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { GROK_PROVIDERS, authClient, authEnabled, signIn } from "@/lib/auth/client";
+import { authClient, authEnabled } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { HouseMark } from "@/components/mark";
 
@@ -22,7 +22,7 @@ function Login() {
         </Link>
         <h1 className="font-display text-3xl">Private Studio</h1>
         <p className="mt-2 text-sm leading-relaxed text-ivory-dim">
-          Sign in with Google to manage the store. The first account becomes the owner. Invited people must use the same Google email they were invited with.
+          Sign in using your invited email address and your own password. Only invited accounts can access the studio.
         </p>
         {isPending ? (
           <p className="mt-8 text-sm text-ivory-dim">Checking your session…</p>
@@ -39,7 +39,6 @@ function Login() {
 }
 
 function AuthForms() {
-  const [emailOpen, setEmailOpen] = useState(false);
   const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,10 +53,10 @@ function AuthForms() {
     setError(null);
     try {
       if (mode === "up") {
-        const { error: err } = await authClient.signUp.email({ email, password, name: name || "Studio" });
+        const { error: err } = await authClient.signUp.email({ email: email.trim().toLowerCase(), password, name: name.trim() || "Studio member" });
         if (err) throw new Error(err.message);
       } else {
-        const { error: err } = await authClient.signIn.email({ email, password });
+        const { error: err } = await authClient.signIn.email({ email: email.trim().toLowerCase(), password });
         if (err) throw new Error(err.message);
       }
       await navigate({ to: "/admin" });
@@ -69,37 +68,17 @@ function AuthForms() {
   }
 
   return (
-    <div className="mt-8 space-y-4">
-      {GROK_PROVIDERS.filter((p) => p.idp === "google").map((p) => (
-        <button
-          key={p.providerId}
-          type="button"
-          onClick={() => signIn(p.providerId, { callbackURL: "/admin", errorCallbackURL: "/login" })}
-          className="btn btn-gold w-full"
-        >
-          Continue with Google
-        </button>
-      ))}
-      <p className="text-center text-xs leading-relaxed text-ivory-dim">
-        New invited users: sign in with the Gmail you were invited with. You will enter as studio admin.
-      </p>
-      <button type="button" className="w-full text-sm text-ivory-dim hover:text-gold" onClick={() => setEmailOpen((v) => !v)}>
-        {emailOpen ? "Hide email sign-in" : "Use email instead"}
-      </button>
-      {emailOpen ? (
-        <form className="grid gap-3" onSubmit={onSubmit}>
-          {mode === "up" ? (
-            <input className="field" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
-          ) : null}
-          <input className="field" type="email" required placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input className="field" type="password" required minLength={8} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          {error ? <p className="text-sm text-danger">{error}</p> : null}
-          <button className="btn btn-outline w-full" type="submit" disabled={busy}>{busy ? "Please wait…" : mode === "up" ? "Create studio account" : "Sign in with email"}</button>
-          <button type="button" className="text-sm text-ivory-dim hover:text-gold" onClick={() => setMode(mode === "in" ? "up" : "in")}>
-            {mode === "in" ? "Need an email account? Sign up" : "Already have an email account? Sign in"}
-          </button>
-        </form>
+    <form className="mt-8 grid gap-3" onSubmit={onSubmit}>
+      {mode === "up" ? (
+        <input className="field" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
       ) : null}
-    </div>
+      <input className="field" type="email" required placeholder="Gmail address" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <input className="field" type="password" required minLength={8} placeholder="Password (at least 8 characters)" value={password} onChange={(e) => setPassword(e.target.value)} />
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
+      <button className="btn btn-gold w-full" type="submit" disabled={busy}>{busy ? "Please wait…" : mode === "up" ? "Create account" : "Sign in"}</button>
+      <button type="button" className="text-sm text-ivory-dim hover:text-gold" onClick={() => { setMode(mode === "in" ? "up" : "in"); setError(null); }}>
+        {mode === "in" ? "First time? Create your invited account" : "Already have an account? Sign in"}
+      </button>
+    </form>
   );
 }
