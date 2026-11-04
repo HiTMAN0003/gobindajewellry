@@ -18,7 +18,7 @@ const AUDIENCE_FILTERS: { key: AudienceFilter; label: string }[] = [
 ];
 
 const EAGER_COUNT = 8;
-const INITIAL_AHEAD = 28;
+const INITIAL_AHEAD = 16;
 
 function recency(item: Jewellery) {
   const stamp = /^j-(\d{10,})$/.exec(item.id);
@@ -55,7 +55,7 @@ function JewelCard({
         setSrcOn(true);
         io.disconnect();
       },
-      { root: null, rootMargin: "1000px 0px", threshold: 0 },
+      { root: null, rootMargin: "700px 0px", threshold: 0 },
     );
     io.observe(el);
     return () => io.disconnect();
