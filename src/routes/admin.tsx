@@ -1,0 +1,1265 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { toast } from "sonner";
+import { ImagePlus, Trash2, Download, Check, ChevronDown, X } from "lucide-react";
+import { UserButton, RedirectToSignIn } from "@/lib/auth/gates";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { getBearerToken } from "@/lib/auth/client";
+import { getStudioSession, inviteStudio, removeStudioMember, revokeStudioInvite } from "@/lib/server/access";
+import { createCategory, deleteCategory, deleteJewellery, getStorefront, renameCategory, saveJewellery, saveMetalRates, saveSettings, setCategoryIcon, setCategoryShown } from "@/lib/server/store";
+import { uploadStudioIcon, uploadStudioPhoto } from "@/lib/upload-image";
+import { AUDIENCES, CATEGORIES, audiencesOf, categoriesOf, type Audience, type Jewellery, type MetalRates, type StoreSettings, type StudioInvite, type StudioMember } from "@/lib/types";
+import { formatUpdated } from "@/lib/format";
+import { HouseMark } from "@/components/mark";
+import { cn } from "@/lib/utils";
+
+export const Route = createFileRoute("/admin")({ component: AdminGate });
+
+function AdminGate() {
+  const { user, isPending } = useCurrentUserState();
+  if (isPending) return <main className="grid min-h-svh place-items-center text-ivory-dim">Loading studio…</main>;
+  if (!user) return <RedirectToSignIn />;
+  return <AdminStudio />;
+}
+
+function AdminStudio() {
+  const [forbidden, setForbidden] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const [items, setItems] = useState<Jewellery[]>([]);
+  const [rates, setRates] = useState<MetalRates>({ goldPerTola: 0, silverPerKg: 0, asOf: null });
+  const [settings, setSettings] = useState<StoreSettings>({ founderName: "Gobinda", founderImage: "/images/founder.jpg", heroImages: [] });
+  const [categories, setCategories] = useState<string[]>([...CATEGORIES]);
+  const [categoryIcons, setCategoryIcons] = useState<Record<string, string>>({});
+  const [categoryShown, setCategoryShown] = useState<Record<string, boolean>>({});
+  const [invites, setInvites] = useState<StudioInvite[]>([]);
+  const [members, setMembers] = useState<StudioMember[]>([]);
+  const [role, setRole] = useState("member");
+  const [userId, setUserId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [session, store] = await Promise.all([getStudioSession(), getStorefront()]);
+        if (cancelled) return;
+        setRole(session.role);
+        setUserId(session.userId);
+        setInvites(session.invites);
+        setMembers(session.members);
+        setItems(store.items);
+        setRates(store.rates);
+        setSettings(store.settings);
+        setCategories(store.categories.length ? store.categories : [...CATEGORIES]);
+        setCategoryIcons(store.categoryIcons ?? {});
+        setCategoryShown(store.categoryShown ?? {});
+        setReady(true);
+      } catch (err) {
+        if (cancelled) return;
+        setForbidden(err instanceof Error ? err.message : "Access denied.");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (forbidden) {
+    return (
+      <main className="grid min-h-svh place-items-center px-6">
+        <div className="surface max-w-md p-8 text-center">
+          <h1 className="font-display text-3xl">Private studio</h1>
+          <p className="mt-3 text-sm text-ivory-dim">{forbidden}</p>
+          <Link to="/" className="btn btn-outline mt-6">Back to store</Link>
+        </div>
+      </main>
+    );
+  }
+  if (!ready) return <main className="grid min-h-svh place-items-center text-ivory-dim">Opening studio…</main>;
+
+  return (
+    <main className="min-h-svh bg-ink pb-16">
+      <header className="border-b border-hair">
+        <div className="wrap flex flex-wrap items-center justify-between gap-4 py-5">
+          <Link to="/" className="flex items-center gap-3">
+            <HouseMark className="size-9 text-gold" />
+            <span className="font-display text-lg tracking-brand">Studio</span>
+          </Link>
+          <UserButton />
+        </div>
+      </header>
+      <div className="wrap mt-10 grid gap-8">
+        <RatesForm rates={rates} onSaved={setRates} />
+        <SettingsForm settings={settings} onSaved={setSettings} />
+        <CategoryStudio
+          categories={categories}
+          icons={categoryIcons}
+          shown={categoryShown}
+          items={items}
+          onSaved={(next) => {
+            setCategories(next.categories);
+            setItems(next.items);
+            setCategoryIcons(next.categoryIcons);
+            setCategoryShown(next.categoryShown);
+          }}
+        />
+        <JewelleryForm
+          items={items}
+          categories={categories}
+          onSaved={setItems}
+          onCategoriesSaved={(next) => {
+            setCategories(next.categories);
+            setItems(next.items);
+            if (next.categoryIcons) setCategoryIcons(next.categoryIcons);
+            if (next.categoryShown) setCategoryShown(next.categoryShown);
+          }}
+        />
+        <BackupPanel
+          onRestored={(store) => {
+            setItems(store.items);
+            setRates(store.rates);
+            setSettings(store.settings);
+            setCategories(store.categories.length ? store.categories : [...CATEGORIES]);
+            setCategoryIcons(store.categoryIcons ?? {});
+            setCategoryShown(store.categoryShown ?? {});
+          }}
+        />
+        {role === "owner" ? (
+          <StudioUsers
+            members={members}
+            invites={invites}
+            currentUserId={userId}
+            onSaved={({ members: nextMembers, invites: nextInvites }) => {
+              setMembers(nextMembers);
+              setInvites(nextInvites);
+            }}
+          />
+        ) : null}
+      </div>
+    </main>
+  );
+}
+
+function RatesForm({ rates, onSaved }: { rates: MetalRates; onSaved: (r: MetalRates) => void }) {
+  const [gold, setGold] = useState(rates.goldPerTola ? String(rates.goldPerTola) : "");
+  const [silver, setSilver] = useState(rates.silverPerKg ? String(rates.silverPerKg) : "");
+  const [busy, setBusy] = useState(false);
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const next = await saveMetalRates({ data: { goldPerTola: Number(gold) || 0, silverPerKg: Number(silver) || 0 } });
+      onSaved(next);
+      toast.success("Rates saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save");
+    } finally { setBusy(false); }
+  }
+  return (
+    <section className="surface p-6 md:p-8">
+      <h2 className="font-display text-2xl">Today's rates</h2>
+      <p className="mt-1 text-sm text-ivory-dim">Gold is per tola (11.6638 g). Silver is per tola (11.6638 g).</p>
+      {rates.asOf ? <p className="mt-2 text-xs text-gold-light">Last saved {formatUpdated(rates.asOf)}</p> : null}
+      <form className="mt-6 grid gap-4 md:grid-cols-2" onSubmit={onSubmit}>
+        <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Gold 24K · per tola (₹)
+          <input className="field" inputMode="numeric" value={gold} onChange={(e) => setGold(e.target.value)} />
+        </label>
+        <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Silver · per tola (₹)
+          <input className="field" inputMode="numeric" value={silver} onChange={(e) => setSilver(e.target.value)} />
+        </label>
+        <button className="btn btn-gold md:col-span-2" type="submit" disabled={busy}>{busy ? "Saving…" : "Save rates"}</button>
+      </form>
+    </section>
+  );
+}
+
+function SettingsForm({ settings, onSaved }: { settings: StoreSettings; onSaved: (s: StoreSettings) => void }) {
+  const [name, setName] = useState(settings.founderName);
+  const [founder, setFounder] = useState(settings.founderImage);
+  const [heroes, setHeroes] = useState<string[]>(settings.heroImages);
+  const [busy, setBusy] = useState(false);
+
+  async function persist(next: { founderName?: string; founderImage?: string; heroImages?: string[] }) {
+    const payload = {
+      founderName: next.founderName ?? name,
+      founderImage: next.founderImage ?? founder,
+      heroImages: next.heroImages ?? heroes,
+    };
+    const saved = await saveSettings({ data: payload });
+    setName(saved.founderName);
+    setFounder(saved.founderImage);
+    setHeroes(saved.heroImages);
+    onSaved(saved);
+    return saved;
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await persist({ founderName: name });
+      toast.success("House details saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <section className="surface p-6 md:p-8">
+      <h2 className="font-display text-2xl">House & banner</h2>
+      <p className="mt-1 text-sm text-ivory-dim">Upload photos from your phone. They appear on the store as soon as they save.</p>
+      <form className="mt-6 grid gap-6" onSubmit={onSubmit}>
+        <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Founder name
+          <input className="field" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <div>
+          <p className="mb-2 text-xs tracking-wide text-ivory-dim">Profile photo</p>
+          <div className="flex flex-wrap items-center gap-4">
+            {founder ? <img src={founder} alt="" className="size-24 rounded-full object-cover ring-1 ring-gold/40" /> : null}
+            <PhotoButton
+              label="Upload profile photo"
+              onUploaded={async (url) => {
+                setFounder(url);
+                try {
+                  await persist({ founderImage: url });
+                  toast.success("Profile photo saved");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Could not save photo");
+                }
+              }}
+            />
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs tracking-wide text-ivory-dim">Store banner carousel</p>
+          <PhotoStrip
+            images={heroes}
+            addLabel="Add banner photo"
+            onAdd={async (url) => {
+              const next = [...heroes, url].slice(0, 8);
+              setHeroes(next);
+              try {
+                await persist({ heroImages: next });
+                toast.success("Banner photo saved");
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Could not save banner");
+              }
+            }}
+            onRemove={async (src) => {
+              const next = heroes.filter((x) => x !== src);
+              if (!next.length) {
+                toast.error("Keep at least one banner photo");
+                return;
+              }
+              setHeroes(next);
+              try {
+                await persist({ heroImages: next });
+                toast.success("Banner updated");
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Could not save banner");
+              }
+            }}
+          />
+        </div>
+        <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Saving…" : "Save house name"}</button>
+      </form>
+    </section>
+  );
+}
+
+const GALLERY_PAGE = 24;
+
+function CategoryField({
+  values,
+  categories,
+  items,
+  onChange,
+  onSaved,
+}: {
+  values: string[];
+  categories: string[];
+  items: Jewellery[];
+  onChange: (names: string[]) => void;
+  onSaved: (next: { categories: string[]; items: Jewellery[]; categoryIcons?: Record<string, string>; categoryShown?: Record<string, boolean> }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"list" | "add" | "edit" | "remove">("list");
+  const [target, setTarget] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [moveTo, setMoveTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = values.length ? values : [];
+
+  const counts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const it of items) {
+      for (const name of categoriesOf(it)) map.set(name, (map.get(name) ?? 0) + 1);
+    }
+    return map;
+  }, [items]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+        setMode("list");
+        setTarget(null);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  function resetList() {
+    setMode("list");
+    setTarget(null);
+    setDraft("");
+    setMoveTo("");
+  }
+
+  function has(name: string) {
+    return selected.some((v) => v.toLowerCase() === name.toLowerCase());
+  }
+
+  function toggle(name: string) {
+    if (has(name)) {
+      if (selected.length <= 1) return;
+      onChange(selected.filter((v) => v.toLowerCase() !== name.toLowerCase()));
+      return;
+    }
+    if (selected.length >= 6) {
+      toast.error("A piece can have up to 6 categories");
+      return;
+    }
+    onChange([...selected, name]);
+  }
+
+  async function addCategory() {
+    setBusy(true);
+    try {
+      const next = await createCategory({ data: { name: draft } });
+      onSaved(next);
+      const created = next.categories.find((c) => c.toLowerCase() === draft.trim().toLowerCase()) ?? next.categories.at(-1);
+      if (created && !has(created) && selected.length < 6) onChange([...selected, created]);
+      resetList();
+      setOpen(false);
+      toast.success("Category added — it is on the store now");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not add category");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveRename() {
+    if (!target) return;
+    setBusy(true);
+    try {
+      const next = await renameCategory({ data: { from: target, to: draft } });
+      onSaved(next);
+      const renamed = next.categories.find((c) => c.toLowerCase() === draft.trim().toLowerCase()) ?? draft.trim();
+      onChange(selected.map((v) => (v.toLowerCase() === target.toLowerCase() ? renamed : v)));
+      resetList();
+      toast.success("Category renamed everywhere");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not rename");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmRemove() {
+    if (!target) return;
+    setBusy(true);
+    try {
+      const pieceCount = counts.get(target) ?? 0;
+      const next = await deleteCategory({ data: { name: target, moveTo: pieceCount > 0 ? moveTo : undefined } });
+      onSaved(next);
+      const kept = selected.filter((v) => v.toLowerCase() !== target.toLowerCase());
+      if (kept.length !== selected.length) {
+        const dest = pieceCount > 0 ? moveTo : "";
+        const merged = dest && !kept.some((v) => v.toLowerCase() === dest.toLowerCase()) ? [...kept, dest] : kept;
+        onChange(merged.length ? merged : [next.categories[0] ?? ""]);
+      }
+      resetList();
+      setOpen(false);
+      toast.success("Category removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const pieceCount = target ? counts.get(target) ?? 0 : 0;
+  const others = categories.filter((c) => c !== target);
+  const label = selected.length ? selected.join(" · ") : "Choose categories";
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <button
+        type="button"
+        className="field flex items-center justify-between gap-2 text-left"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => {
+          setOpen((v) => !v);
+          resetList();
+        }}
+      >
+        <span className="truncate">{label}</span>
+        <ChevronDown className={cn("size-4 shrink-0 text-gold transition-transform", open && "rotate-180")} />
+      </button>
+      <p className="mt-1 text-[0.68rem] text-ivory-dim">Tap to add more. Up to 6 categories on one piece.</p>
+
+      {open ? (
+        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-md border border-hair bg-panel shadow-card">
+          {mode === "list" ? (
+            <>
+              <div className="max-h-52 overflow-y-auto overscroll-contain py-1" role="listbox" aria-multiselectable="true">
+                {categories.map((name) => (
+                  <div
+                    key={name}
+                    className={cn(
+                      "flex items-center gap-2 px-3",
+                      has(name) && "bg-gold/10",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={has(name)}
+                      className="min-h-10 min-w-0 flex-1 truncate py-2 text-left text-sm text-ivory"
+                      onClick={() => toggle(name)}
+                    >
+                      {has(name) ? "✓ " : ""}{name}
+                    </button>
+                    <button
+                      type="button"
+                      className="shrink-0 py-2 text-[0.7rem] tracking-wide text-gold"
+                      onClick={() => {
+                        setTarget(name);
+                        setDraft(name);
+                        setMode("edit");
+                      }}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="flex min-h-11 w-full items-center border-t border-hair px-3 text-sm text-gold"
+                onClick={() => {
+                  setDraft("");
+                  setMode("add");
+                }}
+              >
+                + Add Category
+              </button>
+            </>
+          ) : null}
+
+          {mode === "add" ? (
+            <div className="grid gap-2 p-3">
+              <p className="text-xs tracking-wide text-ivory-dim">New category</p>
+              <input
+                className="field"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Category name"
+                maxLength={80}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void addCategory();
+                  }
+                }}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button className="btn btn-gold !min-h-9 !px-3" type="button" disabled={busy || !draft.trim()} onClick={() => void addCategory()}>
+                  {busy ? "Adding…" : "Add"}
+                </button>
+                <button className="btn btn-outline !min-h-9 !px-3" type="button" onClick={resetList}>Cancel</button>
+              </div>
+            </div>
+          ) : null}
+
+          {mode === "edit" && target ? (
+            <div className="grid gap-2 p-3">
+              <p className="text-xs tracking-wide text-ivory-dim">Edit {target}</p>
+              <input
+                className="field"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                maxLength={80}
+                autoFocus
+                aria-label="Rename category"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void saveRename();
+                  }
+                }}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button className="btn btn-gold !min-h-9 !px-3" type="button" disabled={busy || !draft.trim()} onClick={() => void saveRename()}>
+                  <Check className="size-4" />
+                  {busy ? "Saving…" : "Rename"}
+                </button>
+                <button
+                  className="btn btn-outline !min-h-9 !px-3 text-danger"
+                  type="button"
+                  disabled={busy || categories.length <= 1}
+                  onClick={() => {
+                    setMoveTo(others[0] ?? "");
+                    setMode("remove");
+                  }}
+                >
+                  Remove
+                </button>
+                <button className="btn btn-outline !min-h-9 !px-3" type="button" onClick={resetList} aria-label="Back">
+                  <X className="size-4" />
+                </button>
+              </div>
+              {categories.length <= 1 ? (
+                <p className="text-xs text-ivory-dim">Keep at least one category.</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {mode === "remove" && target ? (
+            <div className="grid gap-2 p-3" role="alertdialog" aria-labelledby="remove-cat-title">
+              <p id="remove-cat-title" className="font-display text-lg">Remove {target}?</p>
+              {pieceCount > 0 ? (
+                <>
+                  <p className="text-sm text-ivory-dim">
+                    {pieceCount} {pieceCount === 1 ? "piece is" : "pieces are"} in this category. They will be moved — jewellery is not deleted.
+                  </p>
+                  <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">
+                    Move jewellery to
+                    <select className="field" value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+                      {others.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              ) : (
+                <p className="text-sm text-ivory-dim">No jewellery is in this category. This cannot be undone.</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="btn btn-gold !min-h-9 !px-3"
+                  type="button"
+                  disabled={busy || (pieceCount > 0 && !moveTo)}
+                  onClick={() => void confirmRemove()}
+                >
+                  {busy ? "Removing…" : "Yes, remove"}
+                </button>
+                <button className="btn btn-outline !min-h-9 !px-3" type="button" onClick={() => setMode("edit")}>Cancel</button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CategoryStudio({
+  categories,
+  icons,
+  shown,
+  items,
+  onSaved,
+}: {
+  categories: string[];
+  icons: Record<string, string>;
+  shown: Record<string, boolean>;
+  items: Jewellery[];
+  onSaved: (next: { categories: string[]; items: Jewellery[]; categoryIcons: Record<string, string>; categoryShown: Record<string, boolean> }) => void;
+}) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [openName, setOpenName] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false);
+  const [removeName, setRemoveName] = useState<string | null>(null);
+  const [moveTo, setMoveTo] = useState("");
+
+  function pieceCount(cat: string) {
+    return items.filter((it) => categoriesOf(it).some((c) => c.toLowerCase() === cat.toLowerCase())).length;
+  }
+
+  async function addCategory(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setBusy("add");
+    try {
+      const next = await createCategory({ data: { name } });
+      onSaved(next);
+      setName("");
+      toast.success("Category added");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not add category");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function rename(from: string, to: string) {
+    if (!to.trim() || to.trim().toLowerCase() === from.toLowerCase()) return;
+    setBusy(from);
+    try {
+      const next = await renameCategory({ data: { from, to } });
+      onSaved(next);
+      const renamed = next.categories.find((c) => c.toLowerCase() === to.trim().toLowerCase()) ?? to.trim();
+      setOpenName(renamed);
+      toast.success("Category renamed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not rename");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function changeIcon(cat: string, file: File | null) {
+    if (!file) return;
+    setBusy(cat);
+    try {
+      const url = await uploadStudioIcon(file);
+      const next = await setCategoryIcon({ data: { name: cat, icon: url } });
+      onSaved(next);
+      toast.success("Category image updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update image");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function clearIcon(cat: string) {
+    setBusy(cat);
+    try {
+      const next = await setCategoryIcon({ data: { name: cat, icon: "" } });
+      onSaved(next);
+      toast.success("Using the default icon");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not reset image");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function toggleShown(cat: string) {
+    setBusy(cat);
+    try {
+      const next = await setCategoryShown({ data: { name: cat, shown: shown[cat] === false } });
+      onSaved(next);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update category");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function remove(cat: string) {
+    const count = pieceCount(cat);
+    setBusy(cat);
+    try {
+      const next = await deleteCategory({ data: { name: cat, moveTo: count > 0 ? moveTo : undefined } });
+      onSaved(next);
+      setRemoveName(null);
+      setOpenName(null);
+      toast.success("Category removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove category");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="surface p-6 md:p-8">
+      <h2 className="font-display text-2xl">Customize categories</h2>
+      <p className="mt-1 text-sm text-ivory-dim">A tick means that category is shown on the homepage. Tap a name to edit it.</p>
+      <button
+        type="button"
+        className="mt-5 flex min-h-12 w-full items-center justify-between rounded-2xl border border-hair bg-white px-4 text-left text-sm text-ivory"
+        aria-expanded={listOpen}
+        onClick={() => {
+          setListOpen((v) => !v);
+          setOpenName(null);
+          setRemoveName(null);
+        }}
+      >
+        <span>Categories <span className="text-ivory-dim">({categories.length})</span></span>
+        <ChevronDown className={cn("size-4 text-gold transition-transform", listOpen && "rotate-180")} />
+      </button>
+      {listOpen ? (
+      <div className="mt-2 overflow-hidden rounded-2xl border border-hair bg-white">
+        <form className="flex gap-2 border-b border-hair p-2" onSubmit={addCategory}>
+          <input className="field !min-h-10" value={name} onChange={(e) => setName(e.target.value)} placeholder="New category" maxLength={80} />
+          <button className="btn btn-gold shrink-0 !min-h-10 !px-3" type="submit" disabled={busy === "add" || !name.trim()}>{busy === "add" ? "Adding…" : "Add"}</button>
+        </form>
+        <ul>
+          {categories.map((cat) => {
+            const open = openName === cat;
+            const visible = shown[cat] !== false;
+            const count = pieceCount(cat);
+            const others = categories.filter((c) => c !== cat);
+            return (
+              <li key={cat} className="border-b border-hair last:border-b-0">
+                <div className={cn("flex items-center", open && "bg-[#fff6ef]")}>
+                  <button
+                    type="button"
+                    className="grid size-11 shrink-0 place-items-center"
+                    aria-pressed={visible}
+                    aria-label={visible ? `Hide ${cat} on the homepage` : `Show ${cat} on the homepage`}
+                    disabled={busy === cat}
+                    onClick={() => void toggleShown(cat)}
+                  >
+                    <span className={cn("grid size-5 place-items-center rounded border", visible ? "border-gold bg-gold text-white" : "border-hair bg-white text-transparent")}>
+                      <Check className="size-3.5" />
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="flex min-h-11 flex-1 items-center justify-between pr-3 text-left text-sm text-ivory"
+                    aria-expanded={open}
+                    onClick={() => {
+                      setOpenName(open ? null : cat);
+                      setRemoveName(null);
+                    }}
+                  >
+                    <span className={cn(!visible && "text-ivory-dim")}>{cat}</span>
+                    <span className="text-xs text-ivory-dim">{open ? "Close" : "Edit"}</span>
+                  </button>
+                </div>
+                {open ? (
+                  <div className="grid gap-2 border-t border-hair px-3 py-3">
+                    <form
+                      className="flex flex-col gap-2 sm:flex-row"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const data = new FormData(e.currentTarget);
+                        void rename(cat, String(data.get("name") ?? ""));
+                      }}
+                    >
+                      <input className="field !min-h-10" name="name" defaultValue={cat} key={cat} maxLength={80} aria-label={`Rename ${cat}`} />
+                      <button className="btn btn-outline shrink-0 !min-h-10 !px-3" type="submit" disabled={busy === cat}>Rename</button>
+                    </form>
+                    <div className="flex flex-wrap gap-2">
+                      <label className="btn btn-outline !min-h-10 cursor-pointer !px-3">
+                        {busy === cat ? "Saving…" : "Change PNG"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="sr-only"
+                          disabled={busy === cat}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            e.target.value = "";
+                            void changeIcon(cat, file);
+                          }}
+                        />
+                      </label>
+                      {icons[cat] ? (
+                        <button className="btn btn-outline !min-h-10 !px-3" type="button" disabled={busy === cat} onClick={() => void clearIcon(cat)}>Use default</button>
+                      ) : null}
+                      <button
+                        className="btn btn-outline !min-h-10 !px-3 text-danger"
+                        type="button"
+                        disabled={busy === cat || categories.length <= 1}
+                        onClick={() => {
+                          setRemoveName(cat);
+                          setMoveTo(others[0] ?? "");
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    {removeName === cat ? (
+                      <div className="grid gap-2 rounded-xl bg-[#fff6ef] p-3">
+                        <p className="text-sm text-ivory">Remove {cat}?</p>
+                        {count > 0 ? (
+                          <label className="grid gap-1 text-xs text-ivory-dim">
+                            {count} {count === 1 ? "piece uses" : "pieces use"} this category. Move them to
+                            <select className="field" value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+                              {others.map((c) => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </label>
+                        ) : (
+                          <p className="text-sm text-ivory-dim">No jewellery is in this category.</p>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          <button className="btn btn-gold !min-h-9 !px-3" type="button" disabled={busy === cat || (count > 0 && !moveTo)} onClick={() => void remove(cat)}>
+                            {busy === cat ? "Removing…" : "Yes, remove"}
+                          </button>
+                          <button className="btn btn-outline !min-h-9 !px-3" type="button" onClick={() => setRemoveName(null)}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      ) : null}
+    </section>
+  );
+}
+
+function pieceRecency(id: string) {
+  const m = /^j-(\d+)$/.exec(id);
+  return m ? Number(m[1]) : 0;
+}
+
+function JewelleryForm({
+  items,
+  categories,
+  onSaved,
+  onCategoriesSaved,
+}: {
+  items: Jewellery[];
+  categories: string[];
+  onSaved: (i: Jewellery[]) => void;
+  onCategoriesSaved: (next: { categories: string[]; items: Jewellery[]; categoryIcons?: Record<string, string>; categoryShown?: Record<string, boolean> }) => void;
+}) {
+  const [editing, setEditing] = useState<Jewellery | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [metal, setMetal] = useState<"gold" | "silver">("gold");
+  const [audiences, setAudiences] = useState<Audience[]>(["women"]);
+  const [cats, setCats] = useState<string[]>([categories[0] ?? CATEGORIES[0]]);
+  const [description, setDescription] = useState("");
+  const [images, setImages] = useState<string[]>([]);
+  const [featured, setFeatured] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [shown, setShown] = useState(GALLERY_PAGE);
+  const [picked, setPicked] = useState<string | null>(null);
+
+  const formOpen = adding || Boolean(editing);
+  const catOptions = categories.length ? categories : [...CATEGORIES];
+  const selectedCats = cats.map((name) => catOptions.find((c) => c.toLowerCase() === name.toLowerCase())).filter((name): name is string => Boolean(name));
+  const pieceCats = selectedCats.length ? selectedCats : [catOptions[0]].filter(Boolean);
+
+  useEffect(() => {
+    if (pieceCats.join("|") !== cats.join("|")) setCats(pieceCats);
+  }, [pieceCats, cats]);
+
+  function load(item: Jewellery | null) {
+    setEditing(item);
+    setAdding(false);
+    setPicked(null);
+    setName(item?.name ?? "");
+    setMetal(item?.metal ?? "gold");
+    setAudiences(item ? audiencesOf(item) : ["women"]);
+    setCats(item ? categoriesOf(item) : [categories[0] ?? CATEGORIES[0]]);
+    setDescription(item?.description ?? "");
+    setImages(item?.images ?? []);
+    setFeatured(item?.featured ?? false);
+  }
+
+  function startAdd() {
+    load(null);
+    setAdding(true);
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!images.length) {
+      toast.error("Upload at least one jewellery photo");
+      return;
+    }
+    setBusy(true);
+    try {
+      const next = await saveJewellery({ data: { id: editing?.id, name, metal, cat: pieceCats[0], cats: pieceCats, audience: audiences[0] ?? "women", audiences, description, images, featured } });
+      onSaved(next);
+      load(null);
+      setShown(GALLERY_PAGE);
+      toast.success("Piece saved — it is on the store now");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save");
+    } finally { setBusy(false); }
+  }
+
+  const newest = useMemo(
+    () => items.slice().sort((a, b) => pieceRecency(b.id) - pieceRecency(a.id) || b.sortOrder - a.sortOrder),
+    [items],
+  );
+  const head = newest.slice(0, GALLERY_PAGE);
+  const extra = newest.slice(GALLERY_PAGE, shown);
+  const remaining = newest.length - shown;
+
+  async function removePiece(it: Jewellery) {
+    if (!confirm(`Remove ${it.name}?`)) return;
+    onSaved(await deleteJewellery({ data: { id: it.id } }));
+    setPicked(null);
+    toast.success("Piece removed");
+  }
+
+  function Tile({ it }: { it: Jewellery }) {
+    const open = picked === it.id;
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          className="block aspect-square w-full overflow-hidden rounded-md bg-panel-2"
+          onClick={() => setPicked(open ? null : it.id)}
+          aria-label={it.name}
+        >
+          {it.images[0] ? (
+            <img src={it.images[0]} alt={it.name} className="h-full w-full object-cover" />
+          ) : (
+            <span className="grid h-full place-items-center font-display text-[0.65rem] tracking-label text-gold">GOBINDA</span>
+          )}
+        </button>
+        {open ? (
+          <div className="absolute inset-0 z-10 flex flex-col justify-end gap-1 bg-ink/75 p-1.5">
+            <button type="button" className="btn btn-gold !min-h-9 !px-2 !text-[0.62rem]" onClick={() => load(it)}>Edit</button>
+            <button type="button" className="btn btn-outline !min-h-9 !px-2 !text-[0.62rem] text-danger" onClick={() => void removePiece(it)}>Remove</button>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <section className="surface p-6 md:p-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl">Jewellery</h2>
+          <p className="mt-1 text-sm text-ivory-dim">Newest uploads first. Tap a photo to edit or remove.</p>
+        </div>
+        <button className="btn btn-gold" type="button" onClick={startAdd}>
+          + Add Jewellery
+        </button>
+      </div>
+
+      {formOpen ? (
+        <form className="mt-6 grid gap-4 border-t border-hair pt-6" onSubmit={onSubmit}>
+          <p className="font-display text-lg">{editing ? "Edit piece" : "New piece"}</p>
+          <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Name
+            <input className="field" required value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Metal
+              <select className="field" value={metal} onChange={(e) => setMetal(e.target.value as "gold" | "silver")}>
+                <option value="gold">Gold</option>
+                <option value="silver">Silver</option>
+              </select>
+            </label>
+            <div className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">
+              <span>Audience</span>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Audience">
+                {AUDIENCES.map((key) => {
+                  const on = audiences.includes(key);
+                  const label = key === "women" ? "Women" : key === "men" ? "Men" : key === "kids" ? "Kids" : "Others";
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      className={cn("chip", on && "is-on")}
+                      aria-pressed={on}
+                      onClick={() => {
+                        setAudiences((prev) => {
+                          if (prev.includes(key)) return prev.length > 1 ? prev.filter((a) => a !== key) : prev;
+                          return [...prev, key];
+                        });
+                      }}
+                    >
+                      {on ? "✓ " : ""}{label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[0.68rem]">Tap Men, Women, Kids, or Others. A piece can be more than one.</p>
+            </div>
+          </div>
+          <label className="relative z-20 grid gap-1.5 text-xs tracking-wide text-ivory-dim">Categories
+            <CategoryField
+              values={pieceCats}
+              categories={catOptions}
+              items={items}
+              onChange={setCats}
+              onSaved={onCategoriesSaved}
+            />
+          </label>
+          <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Description
+            <textarea className="field" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-ivory-dim">
+            <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} /> Featured
+          </label>
+          <PhotoStrip
+            images={images}
+            addLabel="Upload jewellery photo"
+            onAdd={(url) => setImages((prev) => [url, ...prev].slice(0, 8))}
+            onRemove={(src) => setImages((prev) => prev.filter((x) => x !== src))}
+          />
+          <div className="flex flex-wrap gap-3">
+            <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Saving…" : editing ? "Update piece" : "Save jewellery"}</button>
+            <button className="btn btn-outline" type="button" onClick={() => load(null)}>Cancel</button>
+          </div>
+        </form>
+      ) : null}
+
+      {newest.length ? (
+        <>
+          <div className="mt-6 grid grid-cols-4 gap-1.5 sm:gap-2">
+            {head.map((it) => <Tile key={it.id} it={it} />)}
+          </div>
+          {newest.length > GALLERY_PAGE ? (
+            <div className="mt-3 max-h-64 overflow-y-auto overscroll-contain rounded-md border border-hair p-1.5">
+              {extra.length ? (
+                <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+                  {extra.map((it) => <Tile key={it.id} it={it} />)}
+                </div>
+              ) : null}
+              {remaining > 0 ? (
+                <button type="button" className="btn btn-outline mt-2 w-full" onClick={() => setShown((n) => n + GALLERY_PAGE)}>
+                  Load more ({remaining} more)
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="mt-6 text-sm text-ivory-dim">No jewellery uploaded yet. Use Add Jewellery to start.</p>
+      )}
+    </section>
+  );
+}
+
+function BackupPanel({ onRestored }: { onRestored: (store: { items: Jewellery[]; rates: MetalRates; settings: StoreSettings; categories: string[]; categoryIcons?: Record<string, string>; categoryShown?: Record<string, boolean> }) => void }) {
+  const [busy, setBusy] = useState<"down" | "up" | null>(null);
+
+  async function authHeaders(): Promise<HeadersInit> {
+    const token = getBearerToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  async function downloadBackup() {
+    setBusy("down");
+    try {
+      const res = await fetch("/api/backup", { headers: await authHeaders() });
+      if (!res.ok) throw new Error((await res.text()) || "Could not build backup.");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `gobinda-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Full backup downloaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not download backup");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function restoreBackup(file: File) {
+    if (!confirm("Restore this backup? Current jewellery, banner, profile and rates will be replaced. Uploads stay in the same media store.")) return;
+    setBusy("up");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/backup", { method: "POST", headers: await authHeaders(), body });
+      if (!res.ok) throw new Error((await res.text()) || "Could not restore backup.");
+      const store = await getStorefront();
+      onRestored(store);
+      toast.success("Backup restored");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not restore backup");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="surface p-6 md:p-8">
+      <h2 className="font-display text-2xl">Backup</h2>
+      <p className="mt-1 text-sm text-ivory-dim">
+        Download jewellery, rates, house details, and every uploaded photo as one zip. Restore the same zip later without changing how new photos upload.
+      </p>
+      <div className="mt-6 flex flex-wrap gap-3">
+        <button className="btn btn-gold" type="button" disabled={busy !== null} onClick={() => void downloadBackup()}>
+          <Download className="size-4" />
+          {busy === "down" ? "Preparing…" : "Download Full Backup"}
+        </button>
+        <label className="btn btn-outline cursor-pointer">
+          {busy === "up" ? "Restoring…" : "Restore from backup"}
+          <input
+            type="file"
+            accept=".zip,application/zip"
+            className="hidden"
+            disabled={busy !== null}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void restoreBackup(file);
+            }}
+          />
+        </label>
+      </div>
+    </section>
+  );
+}
+
+function StudioUsers({
+  members,
+  invites,
+  currentUserId,
+  onSaved,
+}: {
+  members: StudioMember[];
+  invites: StudioInvite[];
+  currentUserId: string;
+  onSaved: (next: { members: StudioMember[]; invites: StudioInvite[] }) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      onSaved(await inviteStudio({ data: { email } }));
+      setEmail("");
+      toast.success("Invite saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not invite");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <section className="surface p-6 md:p-8">
+      <h2 className="font-display text-2xl">Studio users</h2>
+      <p className="mt-1 text-sm text-ivory-dim">
+        House admin is pavitrasanatan@gmail.com. Invite others with Google. You can remove anyone except the house admin.
+      </p>
+      <form className="mt-6 flex flex-wrap gap-3" onSubmit={onSubmit}>
+        <input className="field max-w-sm" type="email" required placeholder="email@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <button className="btn btn-gold" type="submit" disabled={busy}>Invite</button>
+      </form>
+      <ul className="mt-6 divide-y divide-hair">
+        {members.map((m) => (
+          <li key={m.userId} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <span className="text-sm">
+              {m.email}
+              <span className="text-ivory-dim"> · {m.role === "owner" ? "admin" : "member"}</span>
+            </span>
+            {m.userId !== currentUserId && m.role !== "owner" ? (
+              <button
+                type="button"
+                className="btn btn-outline !min-h-9 !px-3 text-danger"
+                onClick={async () => {
+                  if (!confirm(`Remove ${m.email} from the studio?`)) return;
+                  try {
+                    onSaved(await removeStudioMember({ data: { userId: m.userId } }));
+                    toast.success("User removed");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Could not remove");
+                  }
+                }}
+              >
+                Remove
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {invites.length ? (
+        <>
+          <h3 className="font-display mt-8 text-lg">Pending invites</h3>
+          <ul className="mt-2 divide-y divide-hair">
+            {invites.map((inv) => (
+              <li key={inv.email} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <span className="text-sm text-ivory-dim">{inv.email}</span>
+                <button
+                  type="button"
+                  className="btn btn-outline !min-h-9 !px-3 text-danger"
+                  onClick={async () => {
+                    onSaved(await revokeStudioInvite({ data: { email: inv.email } }));
+                    toast.success("Invite removed");
+                  }}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function PhotoButton({ label, onUploaded }: { label: string; onUploaded: (url: string) => void | Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <label className="btn btn-outline cursor-pointer">
+      <ImagePlus className="size-4" />
+      {busy ? "Uploading…" : label}
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*"
+        className="hidden"
+        disabled={busy}
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file) return;
+          setBusy(true);
+          try {
+            const url = await uploadStudioPhoto(file);
+            await onUploaded(url);
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Could not upload");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
+    </label>
+  );
+}
+
+function PhotoStrip({
+  images,
+  addLabel,
+  onAdd,
+  onRemove,
+}: {
+  images: string[];
+  addLabel: string;
+  onAdd: (url: string) => void | Promise<void>;
+  onRemove: (src: string) => void | Promise<void>;
+}) {
+  return (
+    <div className="flex flex-wrap gap-3">
+      {images.map((src) => (
+        <button
+          key={src}
+          type="button"
+          className="relative size-24 overflow-hidden rounded-md border border-hair"
+          onClick={() => onRemove(src)}
+          aria-label="Remove photo"
+        >
+          <img src={src} alt="" className="h-full w-full object-cover" />
+          <span className="absolute inset-0 grid place-items-center bg-ink/0 text-ivory opacity-0 transition-opacity hover:bg-ink/55 hover:opacity-100">
+            <Trash2 className="size-5" />
+          </span>
+        </button>
+      ))}
+      {images.length < 8 ? <PhotoButton label={addLabel} onUploaded={onAdd} /> : null}
+    </div>
+  );
+}

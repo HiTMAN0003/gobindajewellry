@@ -1,0 +1,27 @@
+Add an AI-powered Smart Search feature to my Gobinda Jewels website.
+
+Make the search typo-tolerant so customers can find products even when they misspell words.
+
+Examples:
+
+- Neklace → Necklace
+- Earings → Earrings
+- Braclet → Bracelet
+- Goold Ring → Gold Ring
+- Chandi Ring → Silver Ring
+
+Requirements:
+
+1. Use fuzzy search and intelligent spelling correction.
+2. Support partial words and approximate product names.
+3. Understand common Hindi, English and Hinglish jewellery search terms.
+4. Show live product suggestions while typing.
+5. Display matching product images, names and prices.
+6. Rank the closest matches first.
+7. If no exact match exists, suggest similar products instead of showing an empty result.
+8. Search existing product names, categories, descriptions and attributes.
+9. Keep search fast and mobile-friendly.
+
+Use a lightweight fuzzy-search solution such as Fuse.js where appropriate. Use AI/API only if genuinely necessary, not for every keystroke.
+
+IMPORTANT: Integrate with my existing product database and search interface. Do not change the admin panel, database structure, product data or other website functionality. Frontend changes only unless an existing backend integration is required.

@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Gobinda Jewellers",
+      "hasCanvas": false,
+      "bodyTextLen": 1915,
+      "bodyTextHash": "56798413781fa03c0d2afc99746621d23fe8a59b46b1f9bb8fa81434a0f10071",
+      "bodyTextPrefix": "GOBINDA JEWELLERS timeless beauty · eternal trust Home The House",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Gobinda Jewellers",
+      "hasCanvas": false,
+      "bodyTextLen": 1957,
+      "bodyTextHash": "cdd1bed61e19543fdf4d951f283be3100657a24abfd130afb58caa1695da7425",
+      "bodyTextPrefix": "GOBINDA JEWELLERS timeless beauty · eternal trust bihar, india ·",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}

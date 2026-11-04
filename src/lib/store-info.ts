@@ -1,0 +1,11 @@
+export const STORE_LOCATION = "Praful Chawk, Rehua Simalbari (Baisi Purnea)";
+export const STORE_ADDRESS_LINES = ["Praful Chawk, Rehua Simalbari", "Baisi, Purnea, Bihar, India"] as const;
+export const STORE_REGION = "Bihar, India";
+export const STORE_PHONE_E164 = "916205991901";
+export const STORE_PHONE_DISPLAY = "+91 6205XXXXX";
+export const STORE_HOURS = "8:00 AM – 7:00 PM";
+export const STORE_HOURS_NOTE = "(All Days)";
+export const WHATSAPP_URL = `https://wa.me/${STORE_PHONE_E164}`;
+export const TEL_URL = `tel:+${STORE_PHONE_E164}`;
+export const MAPS_URL = "https://maps.app.goo.gl/HBriEzZRGyJQK5jd6";
+export const INSTAGRAM_URL = "https://www.instagram.com/visionn.gk/";
