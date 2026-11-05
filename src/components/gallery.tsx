@@ -172,7 +172,7 @@ export function Gallery({
           );
         }
       },
-      { root: null, rootMargin: "700px 0px", threshold: 0 },
+      { root: null, rootMargin: "300px 0px", threshold: 0 },
     );
 
     observer.observe(el);
