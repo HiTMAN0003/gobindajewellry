@@ -82,9 +82,30 @@ export function SiteHeader({
 
   useEffect(() => {
     let ticking = false;
-    const update = () => { ticking = false; setScrolled(readScrollY() > 8); };
-    const onScroll = () => { if (ticking) return; ticking = true; requestAnimationFrame(update); };
-    update();
+    let isScrolled = readScrollY() > 24;
+
+    setScrolled(isScrolled);
+
+    const update = () => {
+      ticking = false;
+      const y = readScrollY();
+
+      // Use separate hide/show thresholds to prevent flicker near the top.
+      if (!isScrolled && y > 24) {
+        isScrolled = true;
+        setScrolled(true);
+      } else if (isScrolled && y < 4) {
+        isScrolled = false;
+        setScrolled(false);
+      }
+    };
+
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(update);
+    };
+
     window.addEventListener("scroll", onScroll, { passive: true, capture: true });
     return () => window.removeEventListener("scroll", onScroll, true);
   }, []);
