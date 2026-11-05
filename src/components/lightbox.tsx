@@ -302,7 +302,14 @@ export function Lightbox({
                   onClick={() => onPick?.(piece)}
                 >
                   <span className="also-photo">
-                    <img src={piece.images[0]} alt="" loading="lazy" decoding="async" />
+                    <img
+  src={piece.images[0]?.startsWith("/api/media/")
+    ? `${piece.images[0]}?size=thumb`
+    : piece.images[0]}
+  alt=""
+  loading="lazy"
+  decoding="async"
+/>
                   </span>
                   <span className="mt-2 block font-display text-[0.95rem] leading-snug text-ivory">{piece.name}</span>
                 </button>
