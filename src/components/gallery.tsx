@@ -143,6 +143,23 @@ export function Gallery({
     () => (query.trim() || !active ? matched : matched.filter((it) => categoriesOf(it).some((c) => c.toLowerCase() === active.toLowerCase()))),
     [matched, active, query],
   );
+
+  const displayItems = useMemo(() => {
+    const recent = [...visible]
+      .sort((a, b) => recency(b) - recency(a))
+      .slice(0, 3);
+
+    const recentIds = new Set(recent.map((item) => item.id));
+    const remaining = visible.filter((item) => !recentIds.has(item.id));
+
+    for (let i = remaining.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
+    }
+
+    return [...recent, ...remaining];
+  }, [visible]);
+
   const suggestions = query.trim() ? matched.slice(0, 6) : [];
   const looking = pool.interpreted.trim().toLowerCase() !== query.trim().toLowerCase() ? pool.interpreted : "";
 
@@ -250,7 +267,7 @@ export function Gallery({
           {visible.length ? (
             <div className="gallery-board">
               <div className="gallery-masonry">
-                {visible.map((item, index) => (
+                {displayItems.map((item, index) => (
                   <div key={item.id} className="gallery-cell">
                     <JewelCard
                       item={item}
