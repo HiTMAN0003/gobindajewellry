@@ -832,9 +832,9 @@ function JewelleryForm({
   const [editing, setEditing] = useState<Jewellery | null>(null);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
-  const [metal, setMetal] = useState<"gold" | "silver">("gold");
+  const [metal, setMetal] = useState<"gold" | "silver">("silver");
   const [audiences, setAudiences] = useState<Audience[]>(["women"]);
-  const [cats, setCats] = useState<string[]>([categories[0] ?? CATEGORIES[0]]);
+  const [cats, setCats] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [featured, setFeatured] = useState(false);
@@ -845,20 +845,17 @@ function JewelleryForm({
   const formOpen = adding || Boolean(editing);
   const catOptions = categories.length ? categories : [...CATEGORIES];
   const selectedCats = cats.map((name) => catOptions.find((c) => c.toLowerCase() === name.toLowerCase())).filter((name): name is string => Boolean(name));
-  const pieceCats = selectedCats.length ? selectedCats : [catOptions[0]].filter(Boolean);
+  const pieceCats = selectedCats;
 
-  useEffect(() => {
-    if (pieceCats.join("|") !== cats.join("|")) setCats(pieceCats);
-  }, [pieceCats, cats]);
 
   function load(item: Jewellery | null) {
     setEditing(item);
     setAdding(false);
     setPicked(null);
     setName(item?.name ?? "");
-    setMetal(item?.metal ?? "gold");
+    setMetal(item?.metal ?? "silver");
     setAudiences(item ? audiencesOf(item) : ["women"]);
-    setCats(item ? categoriesOf(item) : [categories[0] ?? CATEGORIES[0]]);
+    setCats(item ? categoriesOf(item) : []);
     setDescription(item?.description ?? "");
     setImages(item?.images ?? []);
     setFeatured(item?.featured ?? false);
@@ -871,6 +868,10 @@ function JewelleryForm({
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!pieceCats.length) {
+      toast.error("Choose at least one jewellery category");
+      return;
+    }
     if (!images.length) {
       toast.error("Upload at least one jewellery photo");
       return;
@@ -998,8 +999,9 @@ function JewelleryForm({
           <PhotoStrip
             images={images}
             addLabel="Upload jewellery photo"
-            onAdd={(url) => setImages((prev) => [url, ...prev].slice(0, 8))}
+            onAdd={(url) => setImages((prev) => [...prev, url].slice(0, 8))}
             onRemove={(src) => setImages((prev) => prev.filter((x) => x !== src))}
+            onReorder={setImages}
           />
           <div className="flex flex-wrap gap-3">
             <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Saving…" : editing ? "Update piece" : "Save jewellery"}</button>
@@ -1272,64 +1274,166 @@ function StudioUsers({
   );
 }
 
-function PhotoButton({ label, onUploaded }: { label: string; onUploaded: (url: string) => void | Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <label className="btn btn-outline cursor-pointer">
-      <ImagePlus className="size-4" />
-      {busy ? "Uploading…" : label}
-      <input
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*"
-        className="hidden"
-        disabled={busy}
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          e.target.value = "";
-          if (!file) return;
-          setBusy(true);
-          try {
-            const url = await uploadStudioPhoto(file);
-            await onUploaded(url);
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Could not upload");
-          } finally {
-            setBusy(false);
-          }
-        }}
-      />
-    </label>
-  );
-}
-
 function PhotoStrip({
   images,
   addLabel,
   onAdd,
   onRemove,
+  onReorder,
 }: {
   images: string[];
   addLabel: string;
   onAdd: (url: string) => void | Promise<void>;
   onRemove: (src: string) => void | Promise<void>;
+  onReorder?: (next: string[]) => void;
 }) {
+  const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState(0);
+  const [dragged, setDragged] = useState<number | null>(null);
+
+  async function uploadFiles(files: FileList | null, input: HTMLInputElement) {
+    if (!files?.length) return;
+    const available = Math.max(0, 8 - images.length);
+    const chosen = Array.from(files).slice(0, available);
+    input.value = "";
+
+    if (!chosen.length) {
+      toast.error("Maximum 8 photos allowed");
+      return;
+    }
+    if (files.length > available) {
+      toast.error(`Only ${available} more photo(s) can be added`);
+    }
+
+    setBusy(true);
+    try {
+      for (const file of chosen) {
+        const url = await uploadStudioPhoto(file);
+        await onAdd(url);
+      }
+      setSelected(images.length);
+      toast.success(`${chosen.length} photo(s) uploaded`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not upload photos");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function movePhoto(from: number, to: number) {
+    if (to < 0 || to >= images.length || from === to) return;
+    const next = [...images];
+    const [photo] = next.splice(from, 1);
+    next.splice(to, 0, photo);
+    void onRemove("__reorder__");
+    setSelected(to);
+  }
+
   return (
-    <div className="flex flex-wrap gap-3">
-      {images.map((src) => (
-        <button
-          key={src}
-          type="button"
-          className="relative size-24 overflow-hidden rounded-md border border-hair"
-          onClick={() => onRemove(src)}
-          aria-label="Remove photo"
-        >
-          <img src={src} alt="" className="h-full w-full object-cover" />
-          <span className="absolute inset-0 grid place-items-center bg-ink/0 text-ivory opacity-0 transition-opacity hover:bg-ink/55 hover:opacity-100">
-            <Trash2 className="size-5" />
+    <div className="grid gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs tracking-wide text-ivory-dim">Photos · {images.length}/8</span>
+        <span className="text-[0.68rem] text-ivory-dim">First photo is the cover</span>
+      </div>
+
+      {images.length ? (
+        <div className="relative aspect-square w-full max-w-sm overflow-hidden rounded-xl border border-hair bg-panel-2">
+          <img
+            src={images[Math.min(selected, images.length - 1)]}
+            alt="Jewellery preview"
+            className="h-full w-full object-contain"
+          />
+          <span className="absolute left-3 top-3 rounded-full bg-ink/80 px-3 py-1 text-xs text-ivory">
+            {selected === 0 ? "Cover photo" : `Photo ${selected + 1}`}
           </span>
-        </button>
-      ))}
-      {images.length < 8 ? <PhotoButton label={addLabel} onUploaded={onAdd} /> : null}
+          <button
+            type="button"
+            className="absolute right-3 top-3 rounded-full bg-ink/80 p-2 text-ivory"
+            onClick={() => {
+              void onRemove(images[selected]);
+              setSelected(0);
+            }}
+            aria-label="Remove selected photo"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="grid aspect-square w-full max-w-sm place-items-center rounded-xl border border-dashed border-hair bg-panel-2 text-center">
+          <div>
+            <ImagePlus className="mx-auto size-9 text-gold" />
+            <p className="mt-2 text-sm text-ivory-dim">Add jewellery photos</p>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {images.map((src, index) => (
+          <div
+            key={`${src}-${index}`}
+            draggable
+            onDragStart={() => setDragged(index)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragged === null || dragged === index) return;
+              const next = [...images];
+              const [photo] = next.splice(dragged, 1);
+              next.splice(index, 0, photo);
+              onReorder?.(next);
+              setSelected(index);
+              setDragged(null);
+            }}
+            className="relative"
+          >
+            <button
+              type="button"
+              onClick={() => setSelected(index)}
+              className={`size-[4.5rem] overflow-hidden rounded-lg border-2 ${selected === index ? "border-gold" : "border-hair"}`}
+              aria-label={`Select photo ${index + 1}`}
+            >
+              <img src={src} alt="" className="h-full w-full object-cover" />
+            </button>
+            <span className="absolute bottom-1 left-1 rounded bg-ink/80 px-1.5 text-[0.6rem] text-ivory">
+              {index + 1}
+            </span>
+            {index === 0 ? (
+              <span className="absolute -top-1 -right-1 rounded bg-gold px-1.5 text-[0.55rem] text-ink">Cover</span>
+            ) : null}
+            <div className="mt-1 flex justify-center gap-1">
+              <button type="button" className="text-xs text-ivory-dim disabled:opacity-30" disabled={index === 0} onClick={() => {
+                const next = [...images];
+                [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                onReorder?.(next);
+                setSelected(index - 1);
+              }}>←</button>
+              <button type="button" className="text-xs text-ivory-dim disabled:opacity-30" disabled={index === images.length - 1} onClick={() => {
+                const next = [...images];
+                [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                onReorder?.(next);
+                setSelected(index + 1);
+              }}>→</button>
+            </div>
+          </div>
+        ))}
+        {images.length < 8 ? (
+          <label className="grid size-[4.5rem] cursor-pointer place-items-center rounded-lg border border-dashed border-hair text-ivory-dim">
+            <span className="text-2xl">{busy ? "…" : "+"}</span>
+            <span className="text-[0.6rem]">{busy ? "Uploading" : "Add photos"}</span>
+            <input
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*"
+              className="hidden"
+              disabled={busy}
+              onChange={(e) => void uploadFiles(e.target.files, e.currentTarget)}
+            />
+          </label>
+        ) : null}
+      </div>
+      <p className="text-[0.68rem] text-ivory-dim">
+        Select multiple photos together. The first photo is used as the cover. Drag thumbnails or use arrows to reorder.
+      </p>
     </div>
   );
 }
