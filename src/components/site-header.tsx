@@ -3,7 +3,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Menu, X } from "lucide-react";
 import { inr } from "@/lib/format";
 import { pushMenuEntry, readMenuEntry, retreatOverlay } from "@/lib/overlay-history";
-import { STORE_REGION } from "@/lib/store-info";
 import type { MetalRates, StoreSettings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { MenuHouse } from "./profile-section";
@@ -13,6 +12,17 @@ const NAV = [
   { href: "/#top", label: "Home" },
   { href: "/#gallery", label: "Gallery" },
 ];
+
+function formatRateDate(asOf: string | null): string | null {
+  if (!asOf) return null;
+  const date = new Date(asOf);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    timeZone: "Asia/Kolkata",
+  }).format(date).toUpperCase();
+}
 
 function readScrollY(): number {
   return Math.max(
@@ -86,12 +96,13 @@ export function SiteHeader({
 
   const solid = !overlay || scrolled;
   const hideRates = scrolled || open;
+  const rateDate = rates ? formatRateDate(rates.asOf) : null;
 
   return (
     <>
       <header
         className={cn(
-          "sticky top-0 z-50 overflow-hidden border-b transition-[padding,background-color,border-color] duration-500 ease-out",
+          "sticky top-0 z-50 overflow-hidden border-b transition-[padding,background-color,border-color] duration-300 ease-out",
           "pt-[calc(env(safe-area-inset-top,0px)+var(--hdr-y))]",
           solid
             ? "[--hdr-y:0.75rem] border-gold/20 bg-ink/80 pb-3 shadow-[0_10px_28px_rgb(160_100_60_/_10%)] backdrop-blur-xl"
@@ -116,21 +127,20 @@ export function SiteHeader({
           </button>
         </div>
         {rates ? (
-          <div className={cn("grid transition-[grid-template-rows,opacity] duration-500 ease-out", hideRates ? "pointer-events-none grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100")}>
+          <div className={cn("grid transition-[grid-template-rows,opacity] duration-300 ease-out", hideRates ? "pointer-events-none grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100")}>
             <div className="min-h-0 overflow-hidden">
-              <div id="header-rates" aria-hidden={hideRates} className="wrap mt-3 flex flex-col gap-1.5 border-t border-hair pt-2.5 pb-0.5 text-[0.68rem] text-ivory-dim sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                <span className="shrink-0 tracking-label text-gold lowercase">{STORE_REGION} · metal rate</span>
-                <span className="flex items-center gap-3 whitespace-nowrap">
-                  <span>Gold <b className="font-medium text-gold-light">{rates.goldPerTola > 0 ? inr(rates.goldPerTola) : "—"}</b>/tola</span>
-                  <span className="opacity-30">|</span>
-                  <span>Silver <b className="font-medium text-gold-light">{rates.silverPerKg > 0 ? inr(rates.silverPerKg) : "—"}</b>/tola</span>
-                </span>
+              <div id="header-rates" aria-hidden={hideRates} className="wrap mt-2 flex items-center gap-2 overflow-x-auto whitespace-nowrap border-t border-hair pt-2 pb-0.5 text-[0.64rem] leading-tight text-ivory-dim">
+                {rateDate ? <span className="shrink-0 font-medium tracking-wide text-gold">{rateDate}</span> : null}
+                {rateDate ? <span className="shrink-0 opacity-30">|</span> : null}
+                <span className="shrink-0">Gold <b className="font-medium text-gold-light">{rates.goldPerTola > 0 ? inr(rates.goldPerTola) : "—"}</b>/tola</span>
+                <span className="shrink-0 opacity-30">|</span>
+                <span className="shrink-0">Silver <b className="font-medium text-gold-light">{rates.silverPerKg > 0 ? inr(rates.silverPerKg) : "—"}</b>/tola</span>
               </div>
             </div>
           </div>
         ) : null}
       </header>
-      <div className={cn("fixed inset-0 z-[60] flex flex-col gap-6 overflow-y-auto bg-ink px-6 pt-20 pb-10 transition-[transform,opacity] duration-500 ease-out lg:hidden", open ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-full opacity-0")} aria-hidden={!open}>
+      <div className={cn("fixed inset-0 z-[60] flex flex-col gap-6 overflow-y-auto bg-ink px-6 pt-20 pb-10 transition-[transform,opacity] duration-300 ease-out lg:hidden", open ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-full opacity-0")} aria-hidden={!open}>
         <button type="button" className="absolute top-5 right-5 grid size-11 place-items-center text-ivory" aria-label="Close menu" onClick={() => dismissMenu()}>
           <X className="size-6" />
         </button>
@@ -154,7 +164,8 @@ export function SiteHeader({
         ))}
         {rates ? (
           <p className="text-sm text-ivory-dim">
-            {STORE_REGION} · metal rate · Gold {rates.goldPerTola > 0 ? inr(rates.goldPerTola) : "—"}/tola · Silver {rates.silverPerKg > 0 ? inr(rates.silverPerKg) : "—"}/tola
+            {rateDate ? <><span className="text-gold">{rateDate}</span> · </> : null}
+            Gold {rates.goldPerTola > 0 ? inr(rates.goldPerTola) : "—"}/tola · Silver {rates.silverPerKg > 0 ? inr(rates.silverPerKg) : "—"}/tola
           </p>
         ) : null}
         <WhatsAppButton />
