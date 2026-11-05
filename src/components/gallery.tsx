@@ -17,8 +17,9 @@ const AUDIENCE_FILTERS: { key: AudienceFilter; label: string }[] = [
   { key: "others", label: "Others" },
 ];
 
-const EAGER_COUNT = 8;
-const INITIAL_AHEAD = 16;
+const EAGER_COUNT = 14;
+const INITIAL_AHEAD = 14;
+const BATCH_SIZE = 14;
 
 function recency(item: Jewellery) {
   const stamp = /^j-(\d{10,})$/.exec(item.id);
@@ -104,6 +105,8 @@ export function Gallery({
   const [openCat, setOpenCat] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const cats = useMemo(() => {
     const source = categories.length
       ? categories
@@ -177,6 +180,29 @@ export function Gallery({
 
     return [...recent, ...remaining];
   }, [visible]);
+
+  useEffect(() => {
+    setVisibleCount(BATCH_SIZE);
+  }, [audience, metal, openCat, query]);
+
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el || visibleCount >= displayItems.length) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setVisibleCount((count) =>
+            Math.min(count + BATCH_SIZE, displayItems.length),
+          );
+        }
+      },
+      { root: null, rootMargin: "700px 0px", threshold: 0 },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [visibleCount, displayItems.length]);
 
   const suggestions = query.trim() ? matched.slice(0, 6) : [];
   const looking = pool.interpreted.trim().toLowerCase() !== query.trim().toLowerCase() ? pool.interpreted : "";
@@ -285,7 +311,7 @@ export function Gallery({
           {visible.length ? (
             <div className="gallery-board">
               <div className="gallery-masonry">
-                {displayItems.map((item, index) => (
+                {displayItems.slice(0, visibleCount).map((item, index) => (
                   <div key={item.id} className="gallery-cell">
                     <JewelCard
                       item={item}
@@ -296,6 +322,9 @@ export function Gallery({
                   </div>
                 ))}
               </div>
+              {visibleCount < displayItems.length ? (
+                <div ref={loadMoreRef} className="h-2 w-full" aria-hidden="true" />
+              ) : null}
             </div>
           ) : (
             <div className="gallery-board px-8 py-12 text-center">
