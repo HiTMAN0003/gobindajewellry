@@ -270,7 +270,7 @@ export function Lightbox({
             {multi ? (
               <>
                 <img key="prev" src={images[prev]} alt="" draggable={false} onLoad={(e) => remember(prev, e.currentTarget)} style={slide(-1)} />
-                <img key="cur" src={images[index]} alt={item.name} draggable={false} onLoad={(e) => remember(index, e.currentTarget)} style={slide(0)} />
+                <img key="cur" src={images[index]} alt={item.name} draggable={false} loading="eager" fetchPriority="high" decoding="async" onLoad={(e) => remember(index, e.currentTarget)} style={slide(0)} />
                 <img key="next" src={images[next]} alt="" draggable={false} onLoad={(e) => remember(next, e.currentTarget)} style={slide(1)} />
               </>
             ) : images[0] ? (

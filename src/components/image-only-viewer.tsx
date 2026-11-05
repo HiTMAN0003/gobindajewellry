@@ -127,6 +127,9 @@ export function ImageOnlyViewer({ images, index, name, onIndex, onClose }: Props
           <img
             src={images[index]}
             alt={`${name}, image ${index + 1}`}
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
             draggable={false}
             className="max-h-full max-w-full select-none object-contain"
             style={{
