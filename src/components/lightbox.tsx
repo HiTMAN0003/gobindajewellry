@@ -72,6 +72,31 @@ export function Lightbox({
   const [imageOnly, setImageOnly] = useState(false);
   const suppressOpenRef = useRef(false);
   const scrimRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!imageOnly) return;
+
+    window.history.pushState(
+      {
+        ...(typeof window.history.state === "object" && window.history.state
+          ? window.history.state
+          : {}),
+        __gobindaImageViewer: true,
+      },
+      "",
+    );
+
+    const handleBack = () => setImageOnly(false);
+    window.addEventListener("popstate", handleBack);
+
+    return () => {
+      window.removeEventListener("popstate", handleBack);
+
+      if (window.history.state?.__gobindaImageViewer) {
+        window.history.back();
+      }
+    };
+  }, [imageOnly]);
   const related = useMemo(() => relatedPieces(item, items), [item, items]);
 
   const prev = multi ? (index - 1 + n) % n : 0;
