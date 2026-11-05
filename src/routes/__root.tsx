@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { createRootRoute, HeadContent, Outlet, Scripts, useRouterState } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { Toaster } from "sonner";
 import { PRIMARY_SITE_HOST, isGrokPlatformHost } from "@/lib/site-origin";
 import appCss from "../styles.css?url";
@@ -91,6 +92,7 @@ function RootDocument() {
       </head>
       <body className="bg-ink font-sans text-ivory antialiased">
         <PreviewHostBridge />
+        <PwaInstallPrompt />
         <GaSpaViews />
         <AuthProvider>
           <Outlet />

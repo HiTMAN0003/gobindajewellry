@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ApiBackupRouteImport } from './routes/api/backup'
+import { Route as ApiBackupUploadRouteImport } from './routes/api/backup-upload'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiMediaIdRouteImport } from './routes/api/media/$id'
 
@@ -36,6 +37,11 @@ const ApiBackupRoute = ApiBackupRouteImport.update({
   path: '/api/backup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiBackupUploadRoute = ApiBackupUploadRouteImport.update({
+  id: '/api/backup-upload',
+  path: '/api/backup-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/api/backup': typeof ApiBackupRoute
+  '/api/backup-upload': typeof ApiBackupUploadRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/media/$id': typeof ApiMediaIdRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/api/backup': typeof ApiBackupRoute
+  '/api/backup-upload': typeof ApiBackupUploadRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/media/$id': typeof ApiMediaIdRoute
 }
@@ -69,22 +77,36 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
   '/api/backup': typeof ApiBackupRoute
+  '/api/backup-upload': typeof ApiBackupUploadRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/media/$id': typeof ApiMediaIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/admin' | '/login' | '/api/backup' | '/api/auth/$' | '/api/media/$id'
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/api/backup'
+    | '/api/backup-upload'
+    | '/api/auth/$'
+    | '/api/media/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/admin' | '/login' | '/api/backup' | '/api/auth/$' | '/api/media/$id'
+    | '/'
+    | '/admin'
+    | '/login'
+    | '/api/backup'
+    | '/api/backup-upload'
+    | '/api/auth/$'
+    | '/api/media/$id'
   id:
     | '__root__'
     | '/'
     | '/admin'
     | '/login'
     | '/api/backup'
+    | '/api/backup-upload'
     | '/api/auth/$'
     | '/api/media/$id'
   fileRoutesById: FileRoutesById
@@ -94,6 +116,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   LoginRoute: typeof LoginRoute
   ApiBackupRoute: typeof ApiBackupRoute
+  ApiBackupUploadRoute: typeof ApiBackupUploadRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiMediaIdRoute: typeof ApiMediaIdRoute
 }
@@ -128,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBackupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/backup-upload': {
+      id: '/api/backup-upload'
+      path: '/api/backup-upload'
+      fullPath: '/api/backup-upload'
+      preLoaderRoute: typeof ApiBackupUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -150,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   LoginRoute: LoginRoute,
   ApiBackupRoute: ApiBackupRoute,
+  ApiBackupUploadRoute: ApiBackupUploadRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiMediaIdRoute: ApiMediaIdRoute,
 }
