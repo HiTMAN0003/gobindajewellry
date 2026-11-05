@@ -213,18 +213,27 @@ function SettingsForm({ settings, onSaved }: { settings: StoreSettings; onSaved:
           <p className="mb-2 text-xs tracking-wide text-ivory-dim">Profile photo</p>
           <div className="flex flex-wrap items-center gap-4">
             {founder ? <img src={founder} alt="" className="size-24 rounded-full object-cover ring-1 ring-gold/40" /> : null}
-            <PhotoButton
-              label="Upload profile photo"
-              onUploaded={async (url) => {
-                setFounder(url);
-                try {
-                  await persist({ founderImage: url });
-                  toast.success("Profile photo saved");
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Could not save photo");
-                }
-              }}
-            />
+            <label className="btn btn-gold cursor-pointer">
+              Upload profile photo
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.currentTarget.files?.[0];
+                  e.currentTarget.value = "";
+                  if (!file) return;
+                  try {
+                    const url = await uploadStudioPhoto(file);
+                    setFounder(url);
+                    await persist({ founderImage: url });
+                    toast.success("Profile photo saved");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Could not save photo");
+                  }
+                }}
+              />
+            </label>
           </div>
         </div>
         <div>
