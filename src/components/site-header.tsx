@@ -154,7 +154,18 @@ export function SiteHeader({
               const id = item.href.split("#")[1] ?? "";
               dismissMenu(() => {
                 if (!id) return;
-                document.getElementById(id)?.scrollIntoView();
+                window.requestAnimationFrame(() => {
+                  window.requestAnimationFrame(() => {
+                    if (id === "top") {
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                      return;
+                    }
+                    document.getElementById(id)?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                  });
+                });
               });
             }}
             className="font-display text-3xl text-ivory"
