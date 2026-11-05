@@ -152,10 +152,28 @@ export function Gallery({
     const recentIds = new Set(recent.map((item) => item.id));
     const remaining = visible.filter((item) => !recentIds.has(item.id));
 
-    for (let i = remaining.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
-    }
+    const weekStart = new Date();
+    weekStart.setUTCHours(0, 0, 0, 0);
+    weekStart.setUTCDate(
+      weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7),
+    );
+    const weekKey = weekStart.toISOString().slice(0, 10);
+
+    const stableHash = (value: string) => {
+      let hash = 2166136261;
+      for (let i = 0; i < value.length; i += 1) {
+        hash ^= value.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      return hash >>> 0;
+    };
+
+    remaining.sort(
+      (a, b) =>
+        stableHash(`${weekKey}:${a.id}`) -
+          stableHash(`${weekKey}:${b.id}`) ||
+        String(a.id).localeCompare(String(b.id)),
+    );
 
     return [...recent, ...remaining];
   }, [visible]);
