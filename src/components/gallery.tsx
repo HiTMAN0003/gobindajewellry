@@ -18,7 +18,6 @@ const AUDIENCE_FILTERS: { key: AudienceFilter; label: string }[] = [
 ];
 
 const EAGER_COUNT = 14;
-const INITIAL_AHEAD = 14;
 const BATCH_SIZE = 14;
 
 function recency(item: Jewellery) {
@@ -34,52 +33,28 @@ function latestPiece(list: Jewellery[]) {
 function JewelCard({
   item,
   eager,
-  ahead,
   onOpen,
 }: {
   item: Jewellery;
   eager: boolean;
-  ahead: boolean;
   onOpen: (item: Jewellery) => void;
 }) {
-  const slotRef = useRef<HTMLSpanElement>(null);
-  const [srcOn, setSrcOn] = useState(ahead || eager);
   const src = item.images[0];
   const displaySrc = src?.startsWith("/api/media/")
     ? `${src}?size=thumb`
     : src;
 
-  useEffect(() => {
-    if (srcOn) return;
-    const el = slotRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry?.isIntersecting) return;
-        setSrcOn(true);
-        io.disconnect();
-      },
-      { root: null, rootMargin: "700px 0px", threshold: 0 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [srcOn]);
-
   return (
     <button type="button" onClick={() => onOpen(item)} className="jewel-card group" aria-label={item.name}>
       {src ? (
-        srcOn ? (
-          <img
-            src={displaySrc}
-            alt={item.name}
-            className="block w-full"
-            loading={eager ? "eager" : "lazy"}
-            decoding="async"
-            fetchPriority={eager ? "high" : "low"}
-          />
-        ) : (
-          <span ref={slotRef} className="block h-[13.5rem] w-full" aria-hidden="true" />
-        )
+        <img
+          src={displaySrc}
+          alt={item.name}
+          className="block w-full"
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={eager ? "high" : "auto"}
+        />
       ) : (
         <div className="grid min-h-64 place-items-center font-display tracking-label text-gold-light">GOBINDA</div>
       )}
@@ -311,14 +286,23 @@ export function Gallery({
           {visible.length ? (
             <div className="gallery-board">
               <div className="gallery-masonry">
-                {displayItems.slice(0, visibleCount).map((item, index) => (
-                  <div key={item.id} className="gallery-cell">
-                    <JewelCard
-                      item={item}
-                      eager={index < EAGER_COUNT}
-                      ahead={index < INITIAL_AHEAD}
-                      onOpen={onOpen}
-                    />
+                {[
+                  displayItems.slice(0, visibleCount).filter((_, index) => index % 2 === 0),
+                  displayItems.slice(0, visibleCount).filter((_, index) => index % 2 === 1),
+                ].map((columnItems, columnIndex) => (
+                  <div className="gallery-column" key={columnIndex}>
+                    {columnItems.map((item) => {
+                      const index = displayItems.findIndex((entry) => entry.id === item.id);
+                      return (
+                        <div key={item.id} className="gallery-cell">
+                          <JewelCard
+                            item={item}
+                            eager={index < EAGER_COUNT}
+                            onOpen={onOpen}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>

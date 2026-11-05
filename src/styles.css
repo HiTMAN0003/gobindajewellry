@@ -387,20 +387,23 @@
     color: var(--color-gold-light);
   }
   .gallery-masonry {
-    columns: 2;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 0.85rem;
-    column-fill: balance;
+    align-items: start;
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
   }
+  .gallery-column {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
   .gallery-cell {
-    display: inline-block;
+    display: block;
     width: 100%;
-    margin: 0 0 0.85rem;
-    vertical-align: top;
-    break-inside: avoid;
-    -webkit-column-break-inside: avoid;
-    page-break-inside: avoid;
+    margin: 0;
     transform: translate3d(0, 0, 0);
     -webkit-transform: translate3d(0, 0, 0);
     backface-visibility: hidden;
