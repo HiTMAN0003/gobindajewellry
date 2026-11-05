@@ -304,7 +304,7 @@ export function Lightbox({
                   <span className="also-photo">
                     <img
   src={piece.images[0]?.startsWith("/api/media/")
-    ? `${piece.images[0]}?size=thumb`
+    ? `${piece.images[0]}${piece.images[0].includes("?") ? "&" : "?"}size=thumb`
     : piece.images[0]}
   alt=""
   loading="lazy"

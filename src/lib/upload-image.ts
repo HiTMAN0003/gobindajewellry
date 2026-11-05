@@ -52,7 +52,7 @@ async function fileToDataUrl(file: File): Promise<string> {
   }
 }
 
-async function fileToWebpThumb(file: File): Promise<string | undefined> {
+async function fileToWebpThumb(file: File): Promise<{ dataUrl: string; width: number; height: number } | undefined> {
   let source: CanvasImageSource;
   let width = 0;
   let height = 0;
@@ -99,7 +99,7 @@ async function fileToWebpThumb(file: File): Promise<string | undefined> {
     if (!result.startsWith("data:image/webp;base64,") || result.length > 600_000) {
       return undefined;
     }
-    return result;
+    return { dataUrl: result, width: size.width, height: size.height };
   } catch {
     return undefined;
   } finally {
@@ -108,18 +108,20 @@ async function fileToWebpThumb(file: File): Promise<string | undefined> {
   }
 }
 
-export async function uploadStudioPhoto(file: File): Promise<string> {
+export async function uploadStudioPhoto(file: File, includeDimensions = false): Promise<string> {
   if (file.type && !file.type.startsWith("image/")) {
     throw new Error("Please choose a photo.");
   }
-  const [dataUrl, thumbDataUrl] = await Promise.all([
+  const [dataUrl, thumb] = await Promise.all([
     fileToDataUrl(file),
     fileToWebpThumb(file),
   ]);
   if (!dataUrl.startsWith("data:image/")) throw new Error("Could not read that photo.");
-  const saved = await saveMedia({ data: { dataUrl, thumbDataUrl } });
+  const saved = await saveMedia({ data: { dataUrl, thumbDataUrl: thumb?.dataUrl } });
   if (!saved?.url) throw new Error("Could not store that photo.");
-  return saved.url;
+  return includeDimensions && thumb
+    ? `${saved.url}?w=${thumb.width}&h=${thumb.height}`
+    : saved.url;
 }
 
 export async function uploadStudioIcon(file: File): Promise<string> {

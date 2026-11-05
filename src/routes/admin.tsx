@@ -1008,6 +1008,7 @@ function JewelleryForm({
           <PhotoStrip
             images={images}
             addLabel="Upload jewellery photo"
+            includeDimensions
             onAdd={(url) => setImages((prev) => [...prev, url].slice(0, 8))}
             onRemove={(src) => setImages((prev) => prev.filter((x) => x !== src))}
             onReorder={setImages}
@@ -1289,9 +1290,11 @@ function PhotoStrip({
   onAdd,
   onRemove,
   onReorder,
+  includeDimensions = false,
 }: {
   images: string[];
   addLabel: string;
+  includeDimensions?: boolean;
   onAdd: (url: string) => void | Promise<void>;
   onRemove: (src: string) => void | Promise<void>;
   onReorder?: (next: string[]) => void;
@@ -1317,7 +1320,7 @@ function PhotoStrip({
     setBusy(true);
     try {
       for (const file of chosen) {
-        const url = await uploadStudioPhoto(file);
+        const url = await uploadStudioPhoto(file, includeDimensions);
         await onAdd(url);
       }
       setSelected(images.length);

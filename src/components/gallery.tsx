@@ -40,8 +40,10 @@ function JewelCard({
   onOpen: (item: Jewellery) => void;
 }) {
   const src = item.images[0];
+  const imageWidth = Number(src?.match(/[?&]w=(\d+)/)?.[1]) || undefined;
+  const imageHeight = Number(src?.match(/[?&]h=(\d+)/)?.[1]) || undefined;
   const displaySrc = src?.startsWith("/api/media/")
-    ? `${src}?size=thumb`
+    ? `${src}${src.includes("?") ? "&" : "?"}size=thumb`
     : src;
 
   return (
@@ -51,6 +53,8 @@ function JewelCard({
           src={displaySrc}
           alt={item.name}
           className="block w-full"
+          width={imageWidth}
+          height={imageHeight}
           loading={eager ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={eager ? "high" : "auto"}
