@@ -134,6 +134,8 @@ async function bootstrap() {
     }
   }
 
+  await seedCategories(sql);
+
   await sql.query(
     `insert into house_profile (id, founder_name, founder_image, hero_images)
      values (1, 'Gobinda', '/images/founder.jpg', $1::jsonb)
@@ -187,9 +189,6 @@ async function ready() {
     });
   }
   await boot;
-  await ensureCategoryRows();
-  await ensureAudienceColumn();
-  await ensureCatsColumn();
 }
 
 async function readCategoryRows(): Promise<{ name: string; icon: string; shown: boolean }[]> {
