@@ -6,6 +6,7 @@ import type { Jewellery, MetalRates, StoreSettings, Storefront } from "@/lib/typ
 import { CATEGORIES, audiencesOf, categoriesOf } from "@/lib/types";
 import { requireStudio } from "./access";
 import { ensureHouse } from "./house";
+import { putImageObject } from "./object-storage";
 
 const HERO_DEFAULT = [
   "/images/hero-1.jpg",
@@ -68,6 +69,7 @@ function mapItem(row: Record<string, unknown>): Jewellery {
 async function storeDataUrl(dataUrl: string, thumbDataUrl?: string): Promise<string> {
   const m = dataUrl.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/i);
   if (!m) throw new Error("Please upload a JPEG or PNG photo.");
+
   const mime = m[1].toLowerCase() === "image/jpg" ? "image/jpeg" : m[1].toLowerCase();
   const body = m[2].replace(/\s/g, "");
   if (body.length < 80) throw new Error("That photo is empty.");
@@ -75,6 +77,7 @@ async function storeDataUrl(dataUrl: string, thumbDataUrl?: string): Promise<str
 
   let thumbBody: string | null = null;
   let thumbMime: string | null = null;
+
   if (thumbDataUrl) {
     const thumb = thumbDataUrl.match(/^data:image\/webp;base64,([A-Za-z0-9+/=\s]+)$/i);
     if (!thumb) throw new Error("The thumbnail must be a WebP image.");
@@ -86,12 +89,24 @@ async function storeDataUrl(dataUrl: string, thumbDataUrl?: string): Promise<str
   }
 
   const id = `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const extension = mime === "image/jpeg" ? "jpg" : mime.split("/")[1];
+  const objectKey = `jewellery/${id}/original.${extension}`;
+  const thumbObjectKey = thumbBody ? `jewellery/${id}/thumb.webp` : null;
+
+  await putImageObject(objectKey, Buffer.from(body, "base64"), mime);
+
+  if (thumbBody && thumbObjectKey) {
+    await putImageObject(thumbObjectKey, Buffer.from(thumbBody, "base64"), "image/webp");
+  }
+
   const sql = await getSql();
   await sql.query(
-    `insert into house_media (id, mime, body, thumb_mime, thumb_body)
-     values ($1, $2, $3, $4, $5)`,
-    [id, mime, body, thumbMime, thumbBody],
+    `insert into house_media
+      (id, mime, body, thumb_mime, thumb_body, object_key, thumb_object_key)
+     values ($1, $2, '', $3, null, $4, $5)`,
+    [id, mime, thumbMime, objectKey, thumbObjectKey],
   );
+
   return `/api/media/${id}`;
 }
 

@@ -41,6 +41,10 @@ const DDL = [
     body text not null,
     created_at timestamptz default current_timestamp not null
   )`,
+  `alter table house_media add column if not exists thumb_mime text`,
+  `alter table house_media add column if not exists thumb_body text`,
+  `alter table house_media add column if not exists object_key text`,
+  `alter table house_media add column if not exists thumb_object_key text`,
   `create table if not exists house_categories (
     name text primary key,
     sort_order integer not null default 0,

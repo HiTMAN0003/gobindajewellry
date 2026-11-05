@@ -3,6 +3,7 @@ import { extname, join } from "node:path";
 import { getSql } from "@/lib/db";
 import { audiencesOf } from "@/lib/types";
 import { ensureHouse } from "./house";
+import { getImageObject, putImageObject } from "./object-storage";
 import { ensureCategoryRows, ensureAudienceColumn } from "./store";
 import { unzipStore, zipStore, type ZipEntry } from "./zip";
 
@@ -30,7 +31,7 @@ type Manifest = {
   categories?: { name: string; sortOrder: number; icon?: string; shown?: boolean }[];
   profile: { founderName: string; founderImage: string; heroImages: string[] };
   rates: { goldPerTola: number; silverPerKg: number; asOf: string | null };
-  media: { id: string; mime: string; file: string }[];
+  media: { id: string; mime: string; file: string; thumbFile?: string }[];
 };
 
 function parseImages(raw: unknown): string[] {
@@ -112,17 +113,56 @@ export async function buildBackupZip(): Promise<Buffer> {
     icon: String(row.icon ?? ""),
     shown: row.shown !== false && row.shown !== 0,
   }));
-  const mediaRows = await sql.query<{ id: string; mime: string; body: string }>(
-    `select id, mime, body from house_media`,
+  const mediaRows = await sql.query<{
+    id: string;
+    mime: string;
+    body: string;
+    object_key: string | null;
+    thumb_mime: string | null;
+    thumb_body: string | null;
+    thumb_object_key: string | null;
+  }>(
+    `select id, mime, body, object_key, thumb_mime, thumb_body, thumb_object_key from house_media`,
   );
 
   const entries: ZipEntry[] = [];
   const mediaMeta: Manifest["media"] = [];
+
   for (const row of mediaRows) {
     const ext = extFor(row.mime || "image/jpeg");
     const file = `media/${row.id}${ext}`;
-    mediaMeta.push({ id: row.id, mime: row.mime || "image/jpeg", file });
-    entries.push({ name: file, data: Buffer.from(row.body, "base64") });
+    let imageBytes: Buffer;
+
+    if (row.object_key) {
+      const object = await getImageObject(row.object_key);
+      if (!object.Body) throw new Error(`Backup could not read image ${row.id}.`);
+      imageBytes = Buffer.from(await object.Body.transformToByteArray());
+    } else {
+      imageBytes = Buffer.from(row.body || "", "base64");
+    }
+
+    const meta: Manifest["media"][number] = {
+      id: row.id,
+      mime: row.mime || "image/jpeg",
+      file,
+    };
+    entries.push({ name: file, data: imageBytes });
+
+    let thumbBytes: Buffer | null = null;
+    if (row.thumb_object_key) {
+      const thumbObject = await getImageObject(row.thumb_object_key);
+      if (!thumbObject.Body) throw new Error(`Backup could not read thumbnail ${row.id}.`);
+      thumbBytes = Buffer.from(await thumbObject.Body.transformToByteArray());
+    } else if (row.thumb_body) {
+      thumbBytes = Buffer.from(row.thumb_body, "base64");
+    }
+
+    if (thumbBytes) {
+      meta.thumbFile = `media/${row.id}.thumb.webp`;
+      entries.push({ name: meta.thumbFile, data: thumbBytes });
+    }
+
+    mediaMeta.push(meta);
   }
 
   const dir = imagesDir();
@@ -168,30 +208,55 @@ export async function restoreBackupZip(buf: Buffer): Promise<{ pieces: number; m
   const sql = await getSql();
   let mediaCount = 0;
   const listed = Array.isArray(parsed.media) ? parsed.media : [];
+  const restoredIds = new Set<string>();
+
+  async function restoreMedia(
+    id: string,
+    mime: string,
+    data: Buffer,
+    thumbData?: Buffer,
+  ) {
+    const extension = extFor(mime);
+    const objectKey = `jewellery/${id}/original${extension}`;
+    const thumbObjectKey = thumbData ? `jewellery/${id}/thumb.webp` : null;
+
+    await putImageObject(objectKey, data, mime);
+    if (thumbData && thumbObjectKey) {
+      await putImageObject(thumbObjectKey, thumbData, "image/webp");
+    }
+
+    await sql.query(
+      `insert into house_media
+        (id, mime, body, object_key, thumb_mime, thumb_body, thumb_object_key)
+       values ($1, $2, '', $3, $4, null, $5)
+       on conflict (id) do update
+       set mime = excluded.mime, body = '', object_key = excluded.object_key,
+           thumb_mime = excluded.thumb_mime, thumb_body = null,
+           thumb_object_key = excluded.thumb_object_key`,
+      [id, mime, objectKey, thumbData ? "image/webp" : null, thumbObjectKey],
+    );
+
+    restoredIds.add(id);
+    mediaCount += 1;
+  }
+
   for (const item of listed) {
     const file = byName.get(item.file) ?? byName.get(item.file.replace(/^\.?\//, ""));
     if (!file) continue;
+
     const id = String(item.id || "").replace(/[^a-z0-9_-]/gi, "");
     if (!id) continue;
+
     const mime = item.mime || mimeFor(item.file);
-    const body = file.data.toString("base64");
-    await sql.query(
-      `insert into house_media (id, mime, body) values ($1, $2, $3)
-       on conflict (id) do update set mime = excluded.mime, body = excluded.body`,
-      [id, mime, body],
-    );
-    mediaCount += 1;
+    const thumbFile = item.thumbFile ? byName.get(item.thumbFile) : undefined;
+    await restoreMedia(id, mime, file.data, thumbFile?.data);
   }
+
   for (const [name, file] of byName) {
-    const m = name.match(/^media\/([a-z0-9_-]+)\.[a-z0-9]+$/i);
-    if (!m) continue;
-    if (listed.some((x) => x.id === m[1])) continue;
-    await sql.query(
-      `insert into house_media (id, mime, body) values ($1, $2, $3)
-       on conflict (id) do update set mime = excluded.mime, body = excluded.body`,
-      [m[1], mimeFor(name), file.data.toString("base64")],
-    );
-    mediaCount += 1;
+    const match = name.match(/^media\/([a-z0-9_-]+)\.[a-z0-9]+$/i);
+    if (!match || restoredIds.has(match[1])) continue;
+
+    await restoreMedia(match[1], mimeFor(name), file.data);
   }
 
   await sql.query(`delete from house_pieces`);
