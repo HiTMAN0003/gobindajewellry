@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { ChevronLeft, ChevronRight, Share2, X } from "lucide-react";
+import { ImageOnlyViewer } from "@/components/image-only-viewer";
 import { shareJewellery } from "@/lib/share-piece";
 import type { Jewellery } from "@/lib/types";
 import { categoriesOf } from "@/lib/types";
@@ -68,6 +69,8 @@ export function Lightbox({
   const [shift, setShift] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [anim, setAnim] = useState(false);
+  const [imageOnly, setImageOnly] = useState(false);
+  const suppressOpenRef = useRef(false);
   const scrimRef = useRef<HTMLDivElement>(null);
   const related = useMemo(() => relatedPieces(item, items), [item, items]);
 
@@ -159,6 +162,7 @@ export function Lightbox({
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
     if (!multi || busyRef.current || e.button === 1 || e.button === 2) return;
     startX.current = e.clientX;
+    suppressOpenRef.current = false;
     paneW.current = frame.w || maxBox().maxW;
     setDragging(true);
     setAnim(false);
@@ -175,6 +179,7 @@ export function Lightbox({
     if (!dragging) return;
     setDragging(false);
     const dx = shiftRef.current;
+    if (Math.abs(e.clientX - startX.current) > 8) suppressOpenRef.current = true;
     const threshold = Math.min(72, Math.max(40, (paneW.current || frame.w) * 0.15));
     if (dx <= -threshold) commit(1);
     else if (dx >= threshold) commit(-1);
@@ -223,6 +228,13 @@ export function Lightbox({
               height: shown.h,
               transition: dragging ? "none" : `width ${SLIDE_MS}ms var(--ease-out), height ${SLIDE_MS}ms var(--ease-out)`,
             }}
+            onClick={() => {
+              if (suppressOpenRef.current) {
+                suppressOpenRef.current = false;
+                return;
+              }
+              setImageOnly(true);
+            }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -241,22 +253,22 @@ export function Lightbox({
             ) : null}
           </div>
         </div>
-        {multi ? <p className="mt-3 text-[0.68rem] tracking-label text-gold">{index + 1} / {n}</p> : null}
-        <h3 className="font-display mt-4 text-2xl">{item.name}</h3>
-        <p className="mt-1 text-xs tracking-wide text-ivory-dim">{item.metal === "gold" ? "Gold" : "Silver"} · {categoriesOf(item).join(" · ")}</p>
-        {item.description ? <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-ivory-dim">{item.description}</p> : null}
+        {multi ? <p className="mt-2 text-[0.65rem] tracking-label text-gold">{index + 1} / {n}</p> : null}
+        <h3 className="font-display mt-2 text-xl">{item.name}</h3>
+        <p className="mt-0.5 text-[0.68rem] tracking-wide text-ivory-dim">{item.metal === "gold" ? "Gold" : "Silver"} · {categoriesOf(item).join(" · ")}</p>
+        {item.description ? <p className="mx-auto mt-1.5 max-w-xl text-xs leading-relaxed text-ivory-dim">{item.description}</p> : null}
         <button
           type="button"
-          className="btn btn-outline mt-5 min-h-11 px-5"
+          className="btn btn-outline mt-3 min-h-9 px-4 text-[0.62rem]"
           onClick={() => shareJewellery(item, index)}
         >
-          <Share2 className="size-4" aria-hidden="true" />
+          <Share2 className="size-3.5" aria-hidden="true" />
           Share
         </button>
         {related.length ? (
-          <section className="mt-8 w-full" aria-label="You may also like">
-            <h4 className="font-display text-xl text-ivory">You May Also Like</h4>
-            <div className="mt-4 grid grid-cols-2 gap-3">
+          <section className="mt-5 w-full" aria-label="You may also like">
+            <h4 className="font-display text-lg text-ivory">You May Also Like</h4>
+            <div className="mt-3 grid grid-cols-2 gap-3">
               {related.map((piece) => (
                 <button
                   key={piece.id}
@@ -275,6 +287,15 @@ export function Lightbox({
         ) : null}
       </div>
       </div>
+      {imageOnly ? (
+        <ImageOnlyViewer
+          images={images}
+          index={index}
+          name={item.name}
+          onIndex={onIndex}
+          onClose={() => setImageOnly(false)}
+        />
+      ) : null}
     </div>
   );
 }
