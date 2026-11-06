@@ -5,7 +5,13 @@ import { shareJewellery } from "@/lib/share-piece";
 import type { Jewellery } from "@/lib/types";
 import { categoriesOf } from "@/lib/types";
 
+
 const SLIDE_MS = 280;
+
+function thumbnailUrl(src: string) {
+  if (!src.startsWith("/api/media/")) return "";
+  return `${src}${src.includes("?") ? "&" : "?"}size=thumb`;
+}
 
 function maxBox() {
   if (typeof window === "undefined") return { maxW: 672, maxH: 520 };
@@ -270,11 +276,15 @@ export function Lightbox({
             {multi ? (
               <>
                 <img key="prev" src={images[prev]} alt="" draggable={false} onLoad={(e) => remember(prev, e.currentTarget)} style={slide(-1)} />
-                <img key="cur" src={images[index]} alt={item.name} draggable={false} loading="eager" fetchPriority="high" decoding="async" onLoad={(e) => remember(index, e.currentTarget)} style={slide(0)} />
+                <img key="cur-thumb" src={thumbnailUrl(images[index]) || images[index]} alt="" aria-hidden="true" draggable={false} decoding="async" onLoad={(e) => remember(index, e.currentTarget)} style={slide(0)} />
+                <img key="cur" src={images[index]} alt={item.name} draggable={false} loading="eager" fetchPriority="high" decoding="async" onLoad={(e) => { remember(index, e.currentTarget); e.currentTarget.style.opacity = "1"; }} style={{ ...slide(0), opacity: 0, transition: "opacity 180ms ease" }} />
                 <img key="next" src={images[next]} alt="" draggable={false} onLoad={(e) => remember(next, e.currentTarget)} style={slide(1)} />
               </>
             ) : images[0] ? (
-              <img src={images[0]} alt={item.name} draggable={false} onLoad={(e) => remember(0, e.currentTarget)} />
+              <>
+                <img src={thumbnailUrl(images[0]) || images[0]} alt="" aria-hidden="true" draggable={false} onLoad={(e) => remember(0, e.currentTarget)} />
+                <img src={images[0]} alt={item.name} draggable={false} onLoad={(e) => { remember(0, e.currentTarget); e.currentTarget.style.opacity = "1"; }} style={{ opacity: 0, transition: "opacity 180ms ease" }} />
+              </>
             ) : null}
           </div>
         </div>
