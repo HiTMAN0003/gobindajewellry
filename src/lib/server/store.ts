@@ -533,6 +533,25 @@ export const createCategory = createServerFn({ method: "POST" })
     return categoryBundle();
   });
 
+export const reorderCategories = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(z.object({ categories: z.array(z.string().min(1).max(80)).min(1).max(100) }))
+  .handler(async ({ data, context }) => {
+    await ready();
+    await requireStudio(context.userId);
+    const current = await readCategories();
+    if (data.categories.length !== current.length || new Set(data.categories).size !== current.length || current.some((name) => !data.categories.includes(name))) {
+      throw new Error("The category list changed. Refresh and try again.");
+    }
+    const sql = await getSql();
+    const cases = data.categories.map((_, index) => `when $${index + 1} then ${index + 1}`).join(" ");
+    await sql.query(
+      `update house_categories set sort_order = case name ${cases} else sort_order end where name = any($${data.categories.length + 1}::text[])`,
+      [...data.categories, data.categories],
+    );
+    return categoryBundle();
+  });
+
 export const setCategoryIcon = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator(z.object({ name: z.string().min(1).max(80), icon: z.string().max(500) }))
