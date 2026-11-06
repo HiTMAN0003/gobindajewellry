@@ -17,7 +17,7 @@ const AUDIENCE_FILTERS: { key: AudienceFilter; label: string }[] = [
   { key: "others", label: "Others" },
 ];
 
-const EAGER_COUNT = 4;
+const EAGER_COUNT = 3;
 const BATCH_SIZE = 14;
 
 function recency(item: Jewellery) {
