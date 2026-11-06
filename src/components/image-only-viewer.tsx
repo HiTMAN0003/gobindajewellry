@@ -6,8 +6,14 @@ type Props = {
   index: number;
   name: string;
   onIndex: (index: number) => void;
-  onClose: () => void;
-};
+  onClose: () => void; };
+
+function thumbnailUrl(src: string) {
+  if (!src.startsWith("/api/media/")) return src;
+  return src + (src.includes("?") ? "&" : "?") + "size=thumb";
+}
+
+
 
 export function ImageOnlyViewer({ images, index, name, onIndex, onClose }: Props) {
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -154,7 +160,7 @@ export function ImageOnlyViewer({ images, index, name, onIndex, onClose }: Props
               }}
               className={`h-16 w-16 shrink-0 overflow-hidden rounded border-2 ${i === index ? "border-white" : "border-white/25 opacity-65"}`}
             >
-              <img src={src} alt="" className="h-full w-full object-cover" />
+              <img src={thumbnailUrl(src)} alt="" loading={i === index ? "eager" : "lazy"} decoding="async" className="h-full w-full object-cover" />
             </button>
           ))}
         </div>
