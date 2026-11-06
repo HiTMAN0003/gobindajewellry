@@ -1001,8 +1001,8 @@ function JewelleryForm({
       </div>
 
       {formOpen ? (
-        <form className="mt-6 grid gap-4 border-t border-hair pt-6" onSubmit={onSubmit}>
-          <p className="font-display text-lg">{editing ? "Edit piece" : "New piece"}</p>
+        <form className="mt-5 grid gap-3 rounded-2xl border border-gold/15 bg-white/[0.025] p-4 md:gap-4 md:p-5" onSubmit={onSubmit}>
+          <div className="flex items-start justify-between gap-3 border-b border-hair pb-3"><div><p className="font-display text-lg">{editing ? "Edit piece" : "New piece"}</p><p className="mt-1 text-xs text-ivory-dim">Add details, choose categories, and upload photos.</p></div><span className="rounded-full border border-gold/25 bg-gold/10 px-3 py-1 text-[0.65rem] font-semibold tracking-wider text-gold">{editing ? "EDITING" : "NEW"}</span></div>
           <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Name
             <input className="field" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
           </label>
@@ -1404,7 +1404,7 @@ function PhotoStrip({
       </div>
 
       {images.length ? (
-        <div className="relative aspect-square w-full max-w-sm overflow-hidden rounded-xl border border-hair bg-panel-2">
+        <div className={cn("relative w-full max-w-md overflow-hidden rounded-xl border border-hair bg-panel-2", includeDimensions ? "aspect-[4/3]" : "aspect-square")}>
           <img
             src={images[Math.min(selected, images.length - 1)]}
             alt="Jewellery preview"
@@ -1426,7 +1426,7 @@ function PhotoStrip({
           </button>
         </div>
       ) : (
-        <div className="grid aspect-square w-full max-w-sm place-items-center rounded-xl border border-dashed border-hair bg-panel-2 text-center">
+        <div className={cn("grid w-full max-w-md place-items-center rounded-xl border border-dashed border-hair bg-panel-2 text-center", includeDimensions ? "aspect-[4/3]" : "aspect-square")}>
           <div>
             <ImagePlus className="mx-auto size-9 text-gold" />
             <p className="mt-2 text-sm text-ivory-dim">Add jewellery photos</p>
