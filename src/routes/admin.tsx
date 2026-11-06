@@ -202,8 +202,8 @@ function SettingsForm({ settings, onSaved }: { settings: StoreSettings; onSaved:
   }
 
   return (
-    <section className="surface p-6 md:p-8">
-      <h2 className="font-display text-2xl">House & banner</h2>
+    <details className="surface group p-4 md:p-5">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 rounded-full border border-gold/25 bg-gradient-to-r from-[#fff9f2] via-white to-[#f7eee5] px-4 py-2.5 shadow-sm transition hover:border-gold/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold md:px-5"><span className="flex min-w-0 items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-gold/15 text-gold"><HouseMark className="size-5" /></span><span className="font-display text-xl text-ivory">House Banner</span></span><span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gold px-4 py-2 text-xs font-semibold tracking-wide text-ink shadow-sm">Edit <ChevronDown className="size-4 transition-transform group-open:rotate-180" /></span></summary>
       <p className="mt-1 text-sm text-ivory-dim">Upload photos from your phone. They appear on the store as soon as they save.</p>
       <form className="mt-6 grid gap-6" onSubmit={onSubmit}>
         <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Founder name
@@ -269,7 +269,7 @@ function SettingsForm({ settings, onSaved }: { settings: StoreSettings; onSaved:
         </div>
         <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Saving…" : "Save house name"}</button>
       </form>
-    </section>
+    </details>
   );
 }
 
