@@ -153,8 +153,8 @@ function RatesForm({ rates, onSaved }: { rates: MetalRates; onSaved: (r: MetalRa
     } finally { setBusy(false); }
   }
   return (
-    <section className="surface p-6 md:p-8">
-      <h2 className="font-display text-2xl">Today's rates</h2>
+    <details className="surface group p-4 md:p-5">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 rounded-full border border-gold/25 bg-gradient-to-r from-[#fff9f2] via-white to-[#f7eee5] px-4 py-2.5 shadow-sm transition hover:border-gold/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold md:px-5"><span className="flex min-w-0 items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-gold/15 text-gold"><HouseMark className="size-5" /></span><span className="font-display text-xl text-ivory">Today’s Rates</span></span><span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gold px-4 py-2 text-xs font-semibold tracking-wide text-ink shadow-sm">Edit <ChevronDown className="size-4 transition-transform group-open:rotate-180" /></span></summary>
       <p className="mt-1 text-sm text-ivory-dim">Gold is per tola (11.6638 g). Silver is per tola (11.6638 g).</p>
       {rates.asOf ? <p className="mt-2 text-xs text-gold-light">Last saved {formatUpdated(rates.asOf)}</p> : null}
       <form className="mt-6 grid gap-4 md:grid-cols-2" onSubmit={onSubmit}>
@@ -166,7 +166,7 @@ function RatesForm({ rates, onSaved }: { rates: MetalRates; onSaved: (r: MetalRa
         </label>
         <button className="btn btn-gold md:col-span-2" type="submit" disabled={busy}>{busy ? "Saving…" : "Save rates"}</button>
       </form>
-    </section>
+    </details>
   );
 }
 
