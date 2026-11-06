@@ -25,13 +25,13 @@ async function userEmail(userId: string): Promise<string> {
 
 async function listPeople(): Promise<{ members: StudioMember[]; invites: StudioInvite[] }> {
   const sql = await getSql();
-  const members = await sql.query<StudioMember>(
+  const membersPromise = sql.query<StudioMember>(
     `select user_id as "userId", email, role from studio_members order by role desc, email`,
   );
-  const invites = await sql.query<StudioInvite>(
+  const invitesPromise = sql.query<StudioInvite>(
     `select email, created_at as "createdAt" from studio_invites order by created_at desc`,
   );
-  return { members, invites };
+  const [members, invites] = await Promise.all([membersPromise, invitesPromise]); return { members, invites };
 }
 
 export async function requireStudio(userId: string): Promise<{
