@@ -891,8 +891,16 @@ function JewelleryForm({
   const [uploadingImages, setUploadingImages] = useState(false);
   const [shown, setShown] = useState(GALLERY_PAGE);
   const [picked, setPicked] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   const formOpen = adding || Boolean(editing);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (formOpen && !dialog.open) dialog.showModal();
+    else if (!formOpen && dialog.open) dialog.close();
+  }, [formOpen]);
   const catOptions = categories.length ? categories : [...CATEGORIES];
   const selectedCats = cats.map((name) => catOptions.find((c) => c.toLowerCase() === name.toLowerCase())).filter((name): name is string => Boolean(name));
   const pieceCats = selectedCats;
@@ -1001,8 +1009,9 @@ function JewelleryForm({
       </div>
 
       {formOpen ? (
-        <form className="mt-5 grid gap-3 rounded-2xl border border-gold/15 bg-white/[0.025] p-4 md:gap-4 md:p-5" onSubmit={onSubmit}>
-          <div className="flex items-start justify-between gap-3 border-b border-hair pb-3"><div><p className="font-display text-lg">{editing ? "Edit piece" : "New piece"}</p><p className="mt-1 text-xs text-ivory-dim">Add details, choose categories, and upload photos.</p></div><span className="rounded-full border border-gold/25 bg-gold/10 px-3 py-1 text-[0.65rem] font-semibold tracking-wider text-gold">{editing ? "EDITING" : "NEW"}</span></div>
+        <dialog ref={dialogRef} onCancel={(event) => { event.preventDefault(); load(null); }} className="fixed inset-0 m-auto max-h-[92dvh] w-[calc(100%-1rem)] max-w-2xl overflow-y-auto rounded-3xl border border-gold/20 bg-ink p-0 text-ivory shadow-2xl backdrop:bg-ink/75 backdrop:backdrop-blur-sm" aria-labelledby="jewellery-editor-title">
+          <form className="flex flex-col gap-3 p-4 md:p-5" onSubmit={onSubmit}>
+          <div className="flex items-start justify-between gap-3 border-b border-hair pb-3"><div><p id="jewellery-editor-title" className="font-display text-lg">{editing ? "Edit piece" : "New piece"}</p><p className="mt-1 text-xs text-ivory-dim">Add details, choose categories, and upload photos.</p></div><span className="rounded-full border border-gold/25 bg-gold/10 px-3 py-1 text-[0.65rem] font-semibold tracking-wider text-gold">{editing ? "EDITING" : "NEW"}</span><button type="button" className="grid size-9 place-items-center rounded-full border border-hair text-ivory-dim hover:border-gold hover:text-gold" aria-label="Close jewellery editor" onClick={() => load(null)}><X className="size-4" /></button></div>
           <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Name
             <input className="field" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
           </label>
@@ -1069,6 +1078,7 @@ function JewelleryForm({
             <button className="btn btn-outline" type="button" onClick={() => load(null)}>Cancel</button>
           </div>
         </form>
+        </dialog>
       ) : null}
 
       {newest.length ? (
@@ -1397,7 +1407,7 @@ function PhotoStrip({
   }
 
   return (
-    <div className="grid gap-3">
+    <div className={cn("grid gap-3", includeDimensions && "order-first")}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs tracking-wide text-ivory-dim">Photos · {images.length}/8</span>
         <span className="text-[0.68rem] text-ivory-dim">First photo is the cover</span>
