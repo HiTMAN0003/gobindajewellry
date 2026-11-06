@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ImagePlus, Trash2, Download, Check, ChevronDown, ChevronUp, X } from "lucide-react";
+import { ImagePlus, Trash2, Download, Check, ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import { UserButton, RedirectToSignIn } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { getBearerToken } from "@/lib/auth/client";
@@ -294,8 +294,13 @@ function CategoryField({
   const [draft, setDraft] = useState("");
   const [moveTo, setMoveTo] = useState("");
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const selected = values.length ? values : [];
+  const filteredCategories = useMemo(() => {
+    const term = query.trim().toLocaleLowerCase();
+    return term ? categories.filter((name) => name.toLocaleLowerCase().includes(term)) : categories;
+  }, [categories, query]);
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -331,7 +336,10 @@ function CategoryField({
 
   function toggle(name: string) {
     if (has(name)) {
-      if (selected.length <= 1) return;
+      if (selected.length <= 1) {
+        toast.error("Keep at least one category on the jewellery piece.");
+        return;
+      }
       onChange(selected.filter((v) => v.toLowerCase() !== name.toLowerCase()));
       return;
     }
@@ -401,7 +409,7 @@ function CategoryField({
 
   const pieceCount = target ? counts.get(target) ?? 0 : 0;
   const others = categories.filter((c) => c !== target);
-  const label = selected.length ? selected.join(" · ") : "Choose categories";
+  const label = selected.length ? `${selected.length} selected` : "Choose categories";
 
   return (
     <div className="relative" ref={rootRef}>
@@ -418,14 +426,25 @@ function CategoryField({
         <span className="truncate">{label}</span>
         <ChevronDown className={cn("size-4 shrink-0 text-gold transition-transform", open && "rotate-180")} />
       </button>
-      <p className="mt-1 text-[0.68rem] text-ivory-dim">Tap to add more. Up to 6 categories on one piece.</p>
+      {selected.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Selected categories">
+          {selected.map((name) => (
+            <span key={name} className="inline-flex items-center gap-1 rounded-full border border-gold/30 bg-gold/10 px-2.5 py-1 text-xs text-ivory">
+              {name}
+              <button type="button" className="grid size-5 place-items-center rounded-full text-ivory-dim hover:bg-gold/20 hover:text-ivory" aria-label={`Remove ${name}`} onClick={() => toggle(name)}><X className="size-3" /></button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <p className="mt-1 text-[0.68rem] text-ivory-dim">Choose one or more categories. Up to 6 per piece.</p>
 
       {open ? (
         <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-md border border-hair bg-panel shadow-card">
           {mode === "list" ? (
             <>
-              <div className="max-h-52 overflow-y-auto overscroll-contain py-1" role="listbox" aria-multiselectable="true">
-                {categories.map((name) => (
+              <div className="border-b border-hair p-2"><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ivory-dim" /><input className="field !min-h-10 !pl-9" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a category" aria-label="Find a category" /></div></div>
+              <div className="max-h-60 overflow-y-auto overscroll-contain py-1" role="listbox" aria-label="Jewellery categories" aria-multiselectable="true">
+                {filteredCategories.map((name) => (
                   <div
                     key={name}
                     className={cn(
@@ -869,6 +888,7 @@ function JewelleryForm({
   const [images, setImages] = useState<string[]>([]);
   const [featured, setFeatured] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const [shown, setShown] = useState(GALLERY_PAGE);
   const [picked, setPicked] = useState<string | null>(null);
 
@@ -898,6 +918,11 @@ function JewelleryForm({
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    const cleanName = name.trim();
+    if (!cleanName) {
+      toast.error("Enter a name for this jewellery piece.");
+      return;
+    }
     if (!pieceCats.length) {
       toast.error("Choose at least one jewellery category");
       return;
@@ -906,9 +931,13 @@ function JewelleryForm({
       toast.error("Upload at least one jewellery photo");
       return;
     }
+    if (uploadingImages) {
+      toast.error("Wait for the photo upload to finish before saving.");
+      return;
+    }
     setBusy(true);
     try {
-      const next = await saveJewellery({ data: { id: editing?.id, name, metal, cat: pieceCats[0], cats: pieceCats, audience: audiences[0] ?? "women", audiences, description, images, featured } });
+      const next = await saveJewellery({ data: { id: editing?.id, name: cleanName, metal, cat: pieceCats[0], cats: pieceCats, audience: audiences[0] ?? "women", audiences, description: description.trim(), images, featured } });
       onSaved(next);
       load(null);
       setShown(GALLERY_PAGE);
@@ -975,7 +1004,7 @@ function JewelleryForm({
         <form className="mt-6 grid gap-4 border-t border-hair pt-6" onSubmit={onSubmit}>
           <p className="font-display text-lg">{editing ? "Edit piece" : "New piece"}</p>
           <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Name
-            <input className="field" required value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="field" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Metal
@@ -1033,9 +1062,10 @@ function JewelleryForm({
             onAdd={(url) => setImages((prev) => [...prev, url].slice(0, 8))}
             onRemove={(src) => setImages((prev) => prev.filter((x) => x !== src))}
             onReorder={setImages}
+            onBusyChange={setUploadingImages}
           />
           <div className="flex flex-wrap gap-3">
-            <button className="btn btn-gold" type="submit" disabled={busy}>{busy ? "Saving…" : editing ? "Update piece" : "Save jewellery"}</button>
+            <button className="btn btn-gold" type="submit" disabled={busy || uploadingImages}>{uploadingImages ? "Uploading photos…" : busy ? "Saving…" : editing ? "Update piece" : "Save jewellery"}</button>
             <button className="btn btn-outline" type="button" onClick={() => load(null)}>Cancel</button>
           </div>
         </form>
@@ -1311,7 +1341,8 @@ function PhotoStrip({
   onAdd,
   onRemove,
   onReorder,
-  includeDimensions = false,
+  onBusyChange,
+  includeDimensions
 }: {
   images: string[];
   addLabel: string;
@@ -1319,6 +1350,7 @@ function PhotoStrip({
   onAdd: (url: string) => void | Promise<void>;
   onRemove: (src: string) => void | Promise<void>;
   onReorder?: (next: string[]) => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState(0);
@@ -1339,17 +1371,19 @@ function PhotoStrip({
     }
 
     setBusy(true);
+    onBusyChange?.(true);
     try {
       for (const file of chosen) {
         const url = await uploadStudioPhoto(file, includeDimensions);
         await onAdd(url);
       }
-      setSelected(images.length);
+      setSelected(images.length + chosen.length - 1);
       toast.success(`${chosen.length} photo(s) uploaded`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not upload photos");
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   }
 
