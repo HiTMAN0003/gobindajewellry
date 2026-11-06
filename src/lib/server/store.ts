@@ -5,7 +5,6 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import type { Jewellery, MetalRates, StoreSettings, Storefront } from "@/lib/types";
 import { CATEGORIES, audiencesOf, categoriesOf } from "@/lib/types";
 import { requireStudio } from "./access";
-import { ensureHouse } from "./house";
 import { putImageObject } from "./object-storage";
 
 const HERO_DEFAULT = [
@@ -130,7 +129,6 @@ async function silentSelect(sql: Sql, text: string): Promise<Record<string, unkn
 }
 
 async function bootstrap() {
-  await ensureHouse();
   const sql = await getSql();
 
   const pieceCount = await sql.query<{ n: number }>(`select count(*)::int as n from house_pieces`);
