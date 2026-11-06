@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ImagePlus, Trash2, Download, Check, ChevronDown, X } from "lucide-react";
+import { ImagePlus, Trash2, Download, Check, ChevronDown, ChevronUp, X } from "lucide-react";
 import { UserButton, RedirectToSignIn } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { getBearerToken } from "@/lib/auth/client";
 import { getStudioSession, inviteStudio, removeStudioMember, revokeStudioInvite } from "@/lib/server/access";
-import { createCategory, deleteCategory, deleteJewellery, getStorefront, renameCategory, saveJewellery, saveMetalRates, saveSettings, setCategoryIcon, setCategoryShown } from "@/lib/server/store";
+import { createCategory, deleteCategory, deleteJewellery, getStorefront, renameCategory, saveJewellery, saveMetalRates, saveSettings, setCategoryIcon, setCategoryShown, reorderCategories } from "@/lib/server/store";
 import { uploadStudioIcon, uploadStudioPhoto } from "@/lib/upload-image";
 import { AUDIENCES, CATEGORIES, audiencesOf, categoriesOf, type Audience, type Jewellery, type MetalRates, type StoreSettings, type StudioInvite, type StudioMember } from "@/lib/types";
 import { formatUpdated } from "@/lib/format";
@@ -673,6 +673,22 @@ function CategoryStudio({
     }
   }
 
+  async function moveCategory(index: number, direction: -1 | 1) {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= categories.length || busy) return;
+    const nextCategories = [...categories];
+    [nextCategories[index], nextCategories[nextIndex]] = [nextCategories[nextIndex], nextCategories[index]];
+    setBusy("order");
+    try {
+      const next = await reorderCategories({ data: { categories: nextCategories } });
+      onSaved(next);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not reorder categories");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function remove(cat: string) {
     const count = pieceCount(cat);
     setBusy(cat);
@@ -713,7 +729,7 @@ function CategoryStudio({
           <button className="btn btn-gold shrink-0 !min-h-10 !px-3" type="submit" disabled={busy === "add" || !name.trim()}>{busy === "add" ? "Adding…" : "Add"}</button>
         </form>
         <ul>
-          {categories.map((cat) => {
+          {categories.map((cat, index) => {
             const open = openName === cat;
             const visible = shown[cat] !== false;
             const count = pieceCount(cat);
@@ -733,7 +749,12 @@ function CategoryStudio({
                       <Check className="size-3.5" />
                     </span>
                   </button>
-                  <button
+                  
+                                    <div className="flex shrink-0 items-center gap-1 pr-2">
+                    <button type="button" className="grid size-8 place-items-center rounded hover:bg-[#fff6ef] disabled:opacity-30" aria-label={`Move ${cat} up`} title="Move up" disabled={index === 0 || busy !== null} onClick={() => void moveCategory(index, -1)}><ChevronUp className="size-4" /></button>
+                    <button type="button" className="grid size-8 place-items-center rounded hover:bg-[#fff6ef] disabled:opacity-30" aria-label={`Move ${cat} down`} title="Move down" disabled={index === categories.length - 1 || busy !== null} onClick={() => void moveCategory(index, 1)}><ChevronDown className="size-4" /></button>
+                  </div>
+<button
                     type="button"
                     className="flex min-h-11 flex-1 items-center justify-between pr-3 text-left text-sm text-ivory"
                     aria-expanded={open}
