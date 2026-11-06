@@ -35,7 +35,7 @@ export const Route = createFileRoute("/api/media/$id")({
           : row.object_key;
 
         if (objectKey) {
-          return Response.redirect(getPublicImageUrl(objectKey), 302);
+          return new Response(null, { status: 302, headers: { Location: getPublicImageUrl(objectKey), "Cache-Control": "public, max-age=31536000, immutable" } });
         }
 
         const useThumb = thumbnail && Boolean(row.thumb_body);
