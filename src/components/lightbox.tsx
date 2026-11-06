@@ -275,10 +275,10 @@ export function Lightbox({
           >
             {multi ? (
               <>
-                <img key="prev" src={images[prev]} alt="" draggable={false} onLoad={(e) => remember(prev, e.currentTarget)} style={slide(-1)} />
+                <img key="prev" src={thumbnailUrl(images[prev]) || images[prev]} alt="" draggable={false} onLoad={(e) => remember(prev, e.currentTarget)} style={slide(-1)} />
                 <img key="cur-thumb" src={thumbnailUrl(images[index]) || images[index]} alt="" aria-hidden="true" draggable={false} decoding="async" onLoad={(e) => remember(index, e.currentTarget)} style={slide(0)} />
                 <img key="cur" src={images[index]} alt={item.name} draggable={false} loading="eager" fetchPriority="high" decoding="async" onLoad={(e) => { remember(index, e.currentTarget); e.currentTarget.style.opacity = "1"; }} style={{ ...slide(0), opacity: 0, transition: "opacity 180ms ease" }} />
-                <img key="next" src={images[next]} alt="" draggable={false} onLoad={(e) => remember(next, e.currentTarget)} style={slide(1)} />
+                <img key="next" src={thumbnailUrl(images[next]) || images[next]} alt="" draggable={false} onLoad={(e) => remember(next, e.currentTarget)} style={slide(1)} />
               </>
             ) : images[0] ? (
               <>
