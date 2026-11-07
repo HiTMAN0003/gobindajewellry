@@ -68,18 +68,19 @@ export function AdminStudio() {
   return (
     <main className="min-h-svh bg-ink pb-16">
       <header className="border-b border-hair">
-        <div className="wrap flex flex-wrap items-center justify-between gap-4 py-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <Link to="/" className="flex items-center gap-3">
+        <div className="wrap flex items-center justify-between gap-2 py-3 md:gap-4 md:py-5">
+          <div className="flex min-w-0 items-center gap-2 md:gap-3">
+            <Link to="/" className="hidden items-center gap-3 md:flex">
               <HouseMark className="size-9 text-gold" />
               <span className="font-display text-lg tracking-brand">Studio</span>
             </Link>
             <Link to="/" className="btn btn-outline !min-h-10 !px-3 text-xs">
               <Home className="size-4" />
-              Back to website
+              <span className="sm:hidden">Back to home</span>
+              <span className="hidden sm:inline">Back to website</span>
             </Link>
           </div>
-          <UserButton />
+          <UserButton compact />
         </div>
       </header>
       <div className="wrap mt-10 grid gap-8">
