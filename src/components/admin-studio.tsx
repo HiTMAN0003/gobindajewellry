@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ImagePlus, Trash2, Download, Check, ChevronDown, ChevronUp, Search, X } from "lucide-react";
+import { ImagePlus, Trash2, Download, Check, ChevronDown, ChevronUp, Search, X, Home } from "lucide-react";
 import { UserButton } from "@/lib/auth/gates";
 
 import { getBearerToken } from "@/lib/auth/client";
@@ -69,10 +69,16 @@ export function AdminStudio() {
     <main className="min-h-svh bg-ink pb-16">
       <header className="border-b border-hair">
         <div className="wrap flex flex-wrap items-center justify-between gap-4 py-5">
-          <Link to="/" className="flex items-center gap-3">
-            <HouseMark className="size-9 text-gold" />
-            <span className="font-display text-lg tracking-brand">Studio</span>
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link to="/" className="flex items-center gap-3">
+              <HouseMark className="size-9 text-gold" />
+              <span className="font-display text-lg tracking-brand">Studio</span>
+            </Link>
+            <Link to="/" className="btn btn-outline !min-h-10 !px-3 text-xs">
+              <Home className="size-4" />
+              Back to website
+            </Link>
+          </div>
           <UserButton />
         </div>
       </header>
