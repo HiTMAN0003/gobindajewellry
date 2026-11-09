@@ -1082,7 +1082,7 @@ function JewelleryForm({
           itemsError ? <div className="mt-6 text-sm text-ivory-dim" role="alert"><p>Could not load jewellery: {itemsError}</p><button className="btn btn-outline mt-3" type="button" onClick={onLoadItems}>Try again</button></div> :
           newest.length ? (
             <>
-              <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="mt-6 grid grid-cols-4 gap-2">
                 {head.map((it) => <Tile key={it.id} it={it} />)}
               </div>
               {remaining > 0 ? (
