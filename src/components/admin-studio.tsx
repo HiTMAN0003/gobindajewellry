@@ -164,10 +164,13 @@ export function AdminStudio() {
           onLoadItems={loadItems}
           itemsLoading={itemsLoading}
           itemsError={itemsError}
-          onSaved={(nextItems) => {
-            setItems(nextItems);
-            setItemsLoaded(true);
-            setRecentItems(nextItems.slice().sort((a, b) => pieceRecency(b.id) - pieceRecency(a.id) || b.sortOrder - a.sortOrder).slice(0, 4));
+          onSaved={(nextItems) => { setItems(nextItems); setItemsLoaded(true); }}
+          onItemSaved={(savedItem) => {
+            setRecentItems((current) => {
+              const next = [...current.filter((item) => item.id !== savedItem.id), savedItem];
+              return next.sort((a, b) => pieceRecency(b.id) - pieceRecency(a.id) || b.sortOrder - a.sortOrder).slice(0, 4);
+            });
+            if (itemsLoaded) setItems((current) => [...current.filter((item) => item.id !== savedItem.id), savedItem]);
           }}
           onCategoriesSaved={(next) => {
             setCategories(next.categories);
@@ -948,6 +951,7 @@ function JewelleryForm({
   itemsLoading,
   itemsError,
   onSaved,
+  onItemSaved,
   onCategoriesSaved,
 }: {
   items: Jewellery[];
@@ -959,10 +963,12 @@ function JewelleryForm({
   itemsLoading: boolean;
   itemsError: string | null;
   onSaved: (i: Jewellery[]) => void;
+  onItemSaved: (item: Jewellery) => void;
   onCategoriesSaved: (next: { categories: string[]; items: Jewellery[]; categoryIcons?: Record<string, string>; categoryShown?: Record<string, boolean> }) => void;
 }) {
   const [editing, setEditing] = useState<Jewellery | null>(null);
   const [adding, setAdding] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [metal, setMetal] = useState<"gold" | "silver">("silver");
   const [audiences, setAudiences] = useState<Audience[]>(["women"]);
@@ -980,6 +986,16 @@ function JewelleryForm({
   const formOpen = adding || Boolean(editing);
 
   useEffect(() => {
+    if (!busy && !uploadingImages) return;
+    const warnBeforeLeave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeave);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeave);
+  }, [busy, uploadingImages]);
+
+  useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
     if (formOpen && !dialog.open) dialog.showModal();
@@ -992,6 +1008,7 @@ function JewelleryForm({
 
   function load(item: Jewellery | null) {
     setEditing(item);
+    setDraftId(item?.id ?? null);
     setAdding(false);
     setPicked(null);
     setName(item?.name ?? "");
@@ -1005,7 +1022,16 @@ function JewelleryForm({
 
   function startAdd() {
     load(null);
+    setDraftId(`j-${Date.now()}`);
     setAdding(true);
+  }
+
+  function cancelEditing() {
+    if (busy || uploadingImages) {
+      toast.error("Please wait for the upload or save to finish before leaving.");
+      return;
+    }
+    load(null);
   }
 
   async function onSubmit(e: FormEvent) {
@@ -1029,8 +1055,8 @@ function JewelleryForm({
     }
     setBusy(true);
     try {
-      const next = await saveJewellery({ data: { id: editing?.id, name: cleanName, metal, cat: pieceCats[0], cats: pieceCats, audience: audiences[0] ?? "women", audiences, description: description.trim(), images, featured } });
-      onSaved(next);
+      const savedItem = await saveJewellery({ data: { id: editing?.id ?? draftId ?? undefined, name: cleanName, metal, cat: pieceCats[0], cats: pieceCats, audience: audiences[0] ?? "women", audiences, description: description.trim(), images, featured } });
+      onItemSaved(savedItem);
       load(null);
       setShown(GALLERY_PAGE);
       toast.success("Piece saved — it is on the store now");
@@ -1135,9 +1161,9 @@ function JewelleryForm({
       </section>
 
       {formOpen ? (
-        <dialog ref={dialogRef} onCancel={(event) => { event.preventDefault(); load(null); }} className="fixed inset-0 m-auto max-h-[92dvh] w-[calc(100%-1rem)] max-w-2xl overflow-y-auto rounded-3xl border border-gold/20 bg-ink p-0 text-ivory shadow-2xl backdrop:bg-ink/75 backdrop:backdrop-blur-sm" aria-labelledby="jewellery-editor-title">
+        <dialog ref={dialogRef} onCancel={(event) => { event.preventDefault(); cancelEditing(); }} className="fixed inset-0 m-auto max-h-[92dvh] w-[calc(100%-1rem)] max-w-2xl overflow-y-auto rounded-3xl border border-gold/20 bg-ink p-0 text-ivory shadow-2xl backdrop:bg-ink/75 backdrop:backdrop-blur-sm" aria-labelledby="jewellery-editor-title">
           <form className="flex flex-col gap-3 p-4 md:p-5" onSubmit={onSubmit}>
-          <div className="flex items-start justify-between gap-3 border-b border-hair pb-3"><div><p id="jewellery-editor-title" className="font-display text-lg">{editing ? "Edit piece" : "New piece"}</p><p className="mt-1 text-xs text-ivory-dim">Add details, choose categories, and upload photos.</p></div><span className="rounded-full border border-gold/25 bg-gold/10 px-3 py-1 text-[0.65rem] font-semibold tracking-wider text-gold">{editing ? "EDITING" : "NEW"}</span><button type="button" className="grid size-9 place-items-center rounded-full border border-hair text-ivory-dim hover:border-gold hover:text-gold" aria-label="Close jewellery editor" onClick={() => load(null)}><X className="size-4" /></button></div>
+          <div className="flex items-start justify-between gap-3 border-b border-hair pb-3"><div><p id="jewellery-editor-title" className="font-display text-lg">{editing ? "Edit piece" : "New piece"}</p><p className="mt-1 text-xs text-ivory-dim">Add details, choose categories, and upload photos.</p></div><span className="rounded-full border border-gold/25 bg-gold/10 px-3 py-1 text-[0.65rem] font-semibold tracking-wider text-gold">{editing ? "EDITING" : "NEW"}</span><button type="button" className="grid size-9 place-items-center rounded-full border border-hair text-ivory-dim hover:border-gold hover:text-gold" aria-label="Close jewellery editor" disabled={busy || uploadingImages} onClick={cancelEditing}><X className="size-4" /></button></div>
           <label className="grid gap-1.5 text-xs tracking-wide text-ivory-dim">Name
             <input className="field" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
           </label>
@@ -1201,7 +1227,7 @@ function JewelleryForm({
           />
           <div className="flex flex-wrap gap-3">
             <button className="btn btn-gold" type="submit" disabled={busy || uploadingImages}>{uploadingImages ? "Uploading photos…" : busy ? "Saving…" : editing ? "Update piece" : "Save jewellery"}</button>
-            <button className="btn btn-outline" type="button" onClick={() => load(null)}>Cancel</button>
+            <button className="btn btn-outline" type="button" disabled={busy || uploadingImages} onClick={cancelEditing}>Cancel</button>
           </div>
         </form>
         </dialog>
@@ -1465,6 +1491,7 @@ function PhotoStrip({
   onBusyChange?: (busy: boolean) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
   const [selected, setSelected] = useState(0);
   const [dragged, setDragged] = useState<number | null>(null);
 
@@ -1484,17 +1511,39 @@ function PhotoStrip({
 
     setBusy(true);
     onBusyChange?.(true);
+    setProgress(`Uploading 0 of ${chosen.length} photos…`);
     try {
-      for (const file of chosen) {
-        const url = await uploadStudioPhoto(file, includeDimensions);
-        await onAdd(url);
+      const results: (string | undefined)[] = Array(chosen.length).fill(undefined);
+      const failures: File[] = [];
+      let nextIndex = 0;
+      let completed = 0;
+      const worker = async () => {
+        while (nextIndex < chosen.length) {
+          const index = nextIndex++;
+          try {
+            results[index] = await uploadStudioPhoto(chosen[index], includeDimensions);
+          } catch {
+            failures.push(chosen[index]);
+          } finally {
+            completed += 1;
+            setProgress(`Uploaded ${completed} of ${chosen.length} photos…`);
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(2, chosen.length) }, () => worker()));
+      for (const url of results) if (url) await onAdd(url);
+      const uploaded = results.filter(Boolean).length;
+      if (uploaded) setSelected(images.length + uploaded - 1);
+      if (failures.length) {
+        toast.error(`${failures.length} photo(s) failed. Re-select those photos to retry.`);
+      } else {
+        toast.success(`${chosen.length} photo(s) uploaded`);
       }
-      setSelected(images.length + chosen.length - 1);
-      toast.success(`${chosen.length} photo(s) uploaded`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not upload photos");
     } finally {
       setBusy(false);
+      setProgress("");
       onBusyChange?.(false);
     }
   }
@@ -1613,6 +1662,7 @@ function PhotoStrip({
       <p className="text-[0.68rem] text-ivory-dim">
         Select multiple photos together. The first photo is used as the cover. Drag thumbnails or use arrows to reorder.
       </p>
+      {progress ? <p className="text-sm text-gold-light" role="status">{progress}</p> : null}
     </div>
   );
 }
