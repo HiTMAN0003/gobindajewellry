@@ -1085,7 +1085,6 @@ function JewelleryForm({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-display text-2xl">Add Jewellery</h2>
-            <p className="mt-1 text-sm text-ivory-dim">Add a new piece to the collection. The four newest pieces appear here.</p>
           </div>
           <button className="btn btn-gold" type="button" onClick={startAdd}>+ Add Jewellery</button>
         </div>
@@ -1093,23 +1092,17 @@ function JewelleryForm({
           recentError ? <p className="mt-4 text-sm text-ivory-dim" role="alert">Could not load recent jewellery: {recentError}</p> :
           recentItems.length ? <div className="mt-5 grid grid-cols-4 gap-2">{recentItems.slice(0, 4).map((it) => <Tile key={it.id} it={it} />)}</div> :
           <p className="mt-4 text-sm text-ivory-dim">No jewellery uploaded yet.</p>}
-      </section>
 
-      <section className="surface p-6 md:p-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-display text-2xl">Jewellery list</h2>
-            <p className="mt-1 text-sm text-ivory-dim">Load the full list only when you need it.</p>
-          </div>
-          <button className="btn btn-outline" type="button" onClick={() => {
+
+        <div className="mt-5 flex justify-center">
+          <button className="btn btn-outline inline-flex items-center gap-2" type="button" aria-expanded={listOpen} onClick={() => {
             const opening = !listOpen;
             setListOpen(opening);
             if (opening) onLoadItems();
           }}>
-            {listOpen ? "Hide jewellery" : "Load jewellery list"}
+            {listOpen ? <>Hide jewellery <ChevronUp className="size-4" /></> : <>Load jewellery list <ChevronDown className="size-4" /></>}
           </button>
         </div>
-
         {listOpen ? (
           itemsLoading ? <p className="mt-6 text-sm text-ivory-dim" role="status">Loading jewellery…</p> :
           itemsError ? <div className="mt-6 text-sm text-ivory-dim" role="alert"><p>Could not load jewellery: {itemsError}</p><button className="btn btn-outline mt-3" type="button" onClick={onLoadItems}>Try again</button></div> :
@@ -1137,9 +1130,8 @@ function JewelleryForm({
           ) : (
             <p className="mt-6 text-sm text-ivory-dim">No jewellery uploaded yet.</p>
           )
-        ) : (
-          <p className="mt-6 text-sm text-ivory-dim">Jewellery photos stay unloaded until you open the list.</p>
-        )}
+        ) : null}
+
       </section>
 
       {formOpen ? (
