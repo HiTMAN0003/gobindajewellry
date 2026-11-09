@@ -338,9 +338,12 @@ async function readItems(): Promise<Jewellery[]> {
 async function readRecentItems(): Promise<Jewellery[]> {
   const sql = await getSql();
   const rows = await sql.query<Record<string, unknown>>(
-    `select * from house_pieces
-     order by case
-       when id ~ '^j-[0-9]+
+    "select * from house_pieces order by case when id ~ '^j-[0-9]+$' then substring(id from 3)::bigint else 0 end desc, sort_order desc, name limit 4",
+  );
+  return rows.map(mapItem);
+}
+
+async function readRates(): Promise<MetalRates> {
   const sql = await getSql();
   const rows = await sql.query<{ gold_per_tola: number; silver_per_kg: number; as_of: string | null }>(
     `select gold_per_tola, silver_per_kg, as_of from house_rates where id = 1`,
