@@ -6,7 +6,7 @@ import { UserButton } from "@/lib/auth/gates";
 
 import { getBearerToken } from "@/lib/auth/client";
 import { getStudioSession, inviteStudio, removeStudioMember, revokeStudioInvite } from "@/lib/server/access";
-import { createCategory, deleteCategory, deleteJewellery, getStudioJewellery, getStudioOverview, getStorefront, renameCategory, saveJewellery, saveMetalRates, saveSettings, setCategoryIcon, setCategoryShown, reorderCategories } from "@/lib/server/store";
+import { createCategory, deleteCategory, deleteJewellery, getStudioJewellery, getStudioRecentJewellery, getStudioOverview, getStorefront, renameCategory, saveJewellery, saveMetalRates, saveSettings, setCategoryIcon, setCategoryShown, reorderCategories } from "@/lib/server/store";
 import { uploadStudioIcon, uploadStudioPhoto } from "@/lib/upload-image";
 import { AUDIENCES, CATEGORIES, audiencesOf, categoriesOf, type Audience, type Jewellery, type MetalRates, type StoreSettings, type StudioInvite, type StudioMember } from "@/lib/types";
 import { formatUpdated } from "@/lib/format";
@@ -19,6 +19,9 @@ export function AdminStudio() {
   const [storeReady, setStoreReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [items, setItems] = useState<Jewellery[]>([]);
+  const [recentItems, setRecentItems] = useState<Jewellery[]>([]);
+  const [recentLoading, setRecentLoading] = useState(true);
+  const [recentError, setRecentError] = useState<string | null>(null);
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState<string | null>(null);
@@ -57,6 +60,10 @@ export function AdminStudio() {
         setUserId(session.userId);
         sessionLoaded = true;
         setReady(true);
+        void getStudioRecentJewellery()
+          .then((recent) => { if (!cancelled) setRecentItems(recent); })
+          .catch((err) => { if (!cancelled) setRecentError(err instanceof Error ? err.message : "Could not load recent jewellery."); })
+          .finally(() => { if (!cancelled) setRecentLoading(false); });
 
         const store = await getStudioOverview();
         if (cancelled) return;
@@ -150,11 +157,18 @@ export function AdminStudio() {
         />
         <JewelleryForm
           items={items}
+          recentItems={recentItems}
+          recentLoading={recentLoading}
+          recentError={recentError}
           categories={categories}
           onLoadItems={loadItems}
           itemsLoading={itemsLoading}
           itemsError={itemsError}
-          onSaved={(nextItems) => { setItems(nextItems); setItemsLoaded(true); }}
+          onSaved={(nextItems) => {
+            setItems(nextItems);
+            setItemsLoaded(true);
+            setRecentItems(nextItems.slice().sort((a, b) => pieceRecency(b.id) - pieceRecency(a.id) || b.sortOrder - a.sortOrder).slice(0, 4));
+          }}
           onCategoriesSaved={(next) => {
             setCategories(next.categories);
             setItems(next.items);
@@ -926,6 +940,9 @@ function pieceRecency(id: string) {
 
 function JewelleryForm({
   items,
+  recentItems,
+  recentLoading,
+  recentError,
   categories,
   onLoadItems,
   itemsLoading,
@@ -934,6 +951,9 @@ function JewelleryForm({
   onCategoriesSaved,
 }: {
   items: Jewellery[];
+  recentItems: Jewellery[];
+  recentLoading: boolean;
+  recentError: string | null;
   categories: string[];
   onLoadItems: () => void;
   itemsLoading: boolean;
@@ -1011,7 +1031,6 @@ function JewelleryForm({
     try {
       const next = await saveJewellery({ data: { id: editing?.id, name: cleanName, metal, cat: pieceCats[0], cats: pieceCats, audience: audiences[0] ?? "women", audiences, description: description.trim(), images, featured } });
       onSaved(next);
-      setListOpen(true);
       load(null);
       setShown(GALLERY_PAGE);
       toast.success("Piece saved — it is on the store now");
@@ -1065,8 +1084,22 @@ function JewelleryForm({
       <section className="surface p-6 md:p-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-display text-2xl">Jewellery</h2>
-            <p className="mt-1 text-sm text-ivory-dim">Load the list when you need it. Newest pieces appear first.</p>
+            <h2 className="font-display text-2xl">Add Jewellery</h2>
+            <p className="mt-1 text-sm text-ivory-dim">Add a new piece to the collection. The four newest pieces appear here.</p>
+          </div>
+          <button className="btn btn-gold" type="button" onClick={startAdd}>+ Add Jewellery</button>
+        </div>
+        {recentLoading ? <p className="mt-4 text-sm text-ivory-dim" role="status">Loading recent jewellery…</p> :
+          recentError ? <p className="mt-4 text-sm text-ivory-dim" role="alert">Could not load recent jewellery: {recentError}</p> :
+          recentItems.length ? <div className="mt-5 grid grid-cols-4 gap-2">{recentItems.slice(0, 4).map((it) => <Tile key={it.id} it={it} />)}</div> :
+          <p className="mt-4 text-sm text-ivory-dim">No jewellery uploaded yet.</p>}
+      </section>
+
+      <section className="surface p-6 md:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-2xl">Jewellery list</h2>
+            <p className="mt-1 text-sm text-ivory-dim">Load the full list only when you need it.</p>
           </div>
           <button className="btn btn-outline" type="button" onClick={() => {
             const opening = !listOpen;
@@ -1099,11 +1132,7 @@ function JewelleryForm({
         )}
       </section>
 
-      <section className="surface p-6 md:p-8">
-        <h2 className="font-display text-2xl">Add Jewellery</h2>
-        <p className="mt-1 text-sm text-ivory-dim">Add a new piece to the collection.</p>
-        <button className="btn btn-gold mt-5" type="button" onClick={startAdd}>+ Add Jewellery</button>
-              {formOpen ? (
+      {formOpen ? (
         <dialog ref={dialogRef} onCancel={(event) => { event.preventDefault(); load(null); }} className="fixed inset-0 m-auto max-h-[92dvh] w-[calc(100%-1rem)] max-w-2xl overflow-y-auto rounded-3xl border border-gold/20 bg-ink p-0 text-ivory shadow-2xl backdrop:bg-ink/75 backdrop:backdrop-blur-sm" aria-labelledby="jewellery-editor-title">
           <form className="flex flex-col gap-3 p-4 md:p-5" onSubmit={onSubmit}>
           <div className="flex items-start justify-between gap-3 border-b border-hair pb-3"><div><p id="jewellery-editor-title" className="font-display text-lg">{editing ? "Edit piece" : "New piece"}</p><p className="mt-1 text-xs text-ivory-dim">Add details, choose categories, and upload photos.</p></div><span className="rounded-full border border-gold/25 bg-gold/10 px-3 py-1 text-[0.65rem] font-semibold tracking-wider text-gold">{editing ? "EDITING" : "NEW"}</span><button type="button" className="grid size-9 place-items-center rounded-full border border-hair text-ivory-dim hover:border-gold hover:text-gold" aria-label="Close jewellery editor" onClick={() => load(null)}><X className="size-4" /></button></div>
@@ -1175,7 +1204,6 @@ function JewelleryForm({
         </form>
         </dialog>
       ) : null}
-      </section>
     </>
   );
 }
