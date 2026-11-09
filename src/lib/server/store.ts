@@ -390,9 +390,11 @@ export const getStorefront = createServerFn({ method: "GET" }).handler(
   },
 );
 
-export const getStudioOverview = createServerFn({ method: "GET" }).handler(
-  async () => {
+export const getStudioOverview = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
     await ready();
+    await requireStudio(context.userId);
     const [rates, settings, rows] = await Promise.all([
       readRates(),
       readSettings(),
@@ -408,16 +410,20 @@ export const getStudioOverview = createServerFn({ method: "GET" }).handler(
   },
 );
 
-export const getStudioJewellery = createServerFn({ method: "GET" }).handler(
-  async (): Promise<Jewellery[]> => {
+export const getStudioJewellery = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<Jewellery[]> => {
     await ready();
+    await requireStudio(context.userId);
     return readItems();
   },
 );
 
-export const getStudioRecentJewellery = createServerFn({ method: "GET" }).handler(
-  async (): Promise<Jewellery[]> => {
+export const getStudioRecentJewellery = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<Jewellery[]> => {
     await ready();
+    await requireStudio(context.userId);
     return readRecentItems();
   },
 );
