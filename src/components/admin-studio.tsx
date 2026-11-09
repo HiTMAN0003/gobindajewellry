@@ -340,7 +340,7 @@ function SettingsForm({ settings, onSaved }: { settings: StoreSettings; onSaved:
   );
 }
 
-const GALLERY_PAGE = 4;
+const GALLERY_PAGE = 16;
 
 function CategoryField({
   values,
@@ -1064,7 +1064,7 @@ function JewelleryForm({
           aria-label={it.name}
         >
           {it.images[0] ? (
-            <img src={it.images[0]} alt={it.name} className="h-full w-full object-cover" />
+            <img src={it.images[0]} alt={it.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
           ) : (
             <span className="grid h-full place-items-center font-display text-[0.65rem] tracking-label text-gold">GOBINDA</span>
           )}
@@ -1115,14 +1115,24 @@ function JewelleryForm({
           itemsError ? <div className="mt-6 text-sm text-ivory-dim" role="alert"><p>Could not load jewellery: {itemsError}</p><button className="btn btn-outline mt-3" type="button" onClick={onLoadItems}>Try again</button></div> :
           newest.length ? (
             <>
-              <div className="mt-6 grid grid-cols-4 gap-2">
-                {head.map((it) => <Tile key={it.id} it={it} />)}
+              <div
+                className="mt-6 max-h-[70vh] overflow-y-auto overscroll-contain pr-1"
+                onScroll={(event) => {
+                  const panel = event.currentTarget;
+                  if (remaining > 0 && panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 80) {
+                    setShown((count) => Math.min(newest.length, count + GALLERY_PAGE));
+                  }
+                }}
+              >
+                <div className="grid grid-cols-4 gap-2">
+                  {head.map((it) => <Tile key={it.id} it={it} />)}
+                </div>
+                {remaining > 0 ? (
+                  <button type="button" className="btn btn-outline mt-3 w-full" onClick={() => setShown((count) => Math.min(newest.length, count + GALLERY_PAGE))}>
+                    Load more ({remaining} more)
+                  </button>
+                ) : null}
               </div>
-              {remaining > 0 ? (
-                <button type="button" className="btn btn-outline mt-3 w-full" onClick={() => setShown((n) => n + GALLERY_PAGE)}>
-                  Load more ({remaining} more)
-                </button>
-              ) : null}
             </>
           ) : (
             <p className="mt-6 text-sm text-ivory-dim">No jewellery uploaded yet.</p>
