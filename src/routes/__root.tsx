@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { createRootRoute, HeadContent, Outlet, Scripts, useRouterState } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
@@ -8,7 +8,6 @@ import { PRIMARY_SITE_HOST, isGrokPlatformHost } from "@/lib/site-origin";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "Gobinda Jewellers";
-const GA_MEASUREMENT_ID = "G-N7RS69X8ES";
 
 function publicShareHost(): string {
   const raw = String(import.meta.env.VITE_PUBLIC_HOSTNAME ?? "").trim();
@@ -19,22 +18,6 @@ function publicShareHost(): string {
   if (host === "vercel.app" || host.endsWith(".vercel.app")) return PRIMARY_SITE_HOST;
   if (host === "vercel.com" || host.endsWith(".vercel.com")) return PRIMARY_SITE_HOST;
   return host;
-}
-
-function GaSpaViews() {
-  const href = useRouterState({ select: (s) => s.location.href });
-  const skipFirst = useRef(true);
-  useEffect(() => {
-    if (skipFirst.current) { skipFirst.current = false; return; }
-    const gtag = (window as Window & { gtag?: (...args: unknown[]) => void }).gtag;
-    if (typeof gtag !== "function") return;
-    gtag("event", "page_view", {
-      page_path: window.location.pathname + window.location.search,
-      page_location: window.location.href,
-      page_title: document.title,
-    });
-  }, [href]);
-  return null;
 }
 
 export const Route = createRootRoute({
@@ -77,28 +60,6 @@ function RootDocument() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadAnalytics = () => {
-      if (cancelled || document.querySelector("script[data-gj-analytics]")) return;
-      const target = window as Window & { dataLayer?: unknown[]; gtag?: (...args: unknown[]) => void };
-      target.dataLayer = target.dataLayer || [];
-      target.gtag = target.gtag || ((...args: unknown[]) => target.dataLayer?.push(args));
-      target.gtag("js", new Date());
-      target.gtag("config", GA_MEASUREMENT_ID);
-      const script = document.createElement("script");
-      script.async = true;
-      script.dataset.gjAnalytics = "true";
-      script.src = "https://www.googletagmanager.com/gtag/js?id=" + GA_MEASUREMENT_ID;
-      document.head.append(script);
-    };
-    const idleWindow = window as Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number };
-    const timer = window.setTimeout(() => {
-      if (idleWindow.requestIdleCallback) idleWindow.requestIdleCallback(loadAnalytics, { timeout: 4000 });
-      else loadAnalytics();
-    }, 1800);
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, []);
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -106,7 +67,6 @@ function RootDocument() {
       <body className="bg-ink font-sans text-ivory antialiased">
         <PreviewHostBridge />
         <PwaInstallPrompt />
-        <GaSpaViews />
         <AuthProvider><Outlet /></AuthProvider>
         <Toaster theme="dark" position="bottom-center" />
         <Scripts />
