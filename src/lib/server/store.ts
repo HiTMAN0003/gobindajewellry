@@ -471,6 +471,7 @@ export const saveJewellery = createServerFn({ method: "POST" })
     if (!resolved.length) throw new Error("Choose a jewellery category.");
     const audiences = audiencesOf({ audience: data.audience, audiences: data.audiences ?? [data.audience] });
     const id = data.id || `j-${Date.now()}`;
+    const images = await persistImages(data.images);
     await sql.query(
       `insert into house_pieces (id, name, metal, cat, cats, audience, audiences, description, images, featured, sort_order)
        values ($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb,$8,$9::jsonb,$10,100)
@@ -484,9 +485,14 @@ export const saveJewellery = createServerFn({ method: "POST" })
          description = excluded.description,
          images = excluded.images,
          featured = excluded.featured`,
-      [id, data.name, data.metal, resolved[0], JSON.stringify(resolved), audiences[0], JSON.stringify(audiences), data.description ?? "", JSON.stringify(await persistImages(data.images)), data.featured],
+      [id, data.name, data.metal, resolved[0], JSON.stringify(resolved), audiences[0], JSON.stringify(audiences), data.description ?? "", JSON.stringify(images), data.featured],
     );
-    return readItems();
+    const savedRows = await sql.query<Record<string, unknown>>(
+      `select * from house_pieces where id = $1`,
+      [id],
+    );
+    if (!savedRows[0]) throw new Error("Could not read the saved jewellery piece.");
+    return mapItem(savedRows[0]);
   });
 
 export const deleteJewellery = createServerFn({ method: "POST" })
