@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 export function AdminStudio() {
   const [forbidden, setForbidden] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [storeReady, setStoreReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [items, setItems] = useState<Jewellery[]>([]);
   const [rates, setRates] = useState<MetalRates>({ goldPerTola: 0, silverPerKg: 0, asOf: null });
   const [settings, setSettings] = useState<StoreSettings>({ founderName: "Gobinda", founderImage: "/images/founder.jpg", heroImages: [] });
@@ -29,12 +31,18 @@ export function AdminStudio() {
 
   useEffect(() => {
     let cancelled = false;
+    let sessionLoaded = false;
     (async () => {
       try {
-        const [session, store] = await Promise.all([getStudioSession(), getStorefront()]);
+        const session = await getStudioSession();
         if (cancelled) return;
         setRole(session.role);
         setUserId(session.userId);
+        sessionLoaded = true;
+        setReady(true);
+
+        const store = await getStorefront();
+        if (cancelled) return;
         setInvites(session.invites);
         setMembers(session.members);
         setItems(store.items);
@@ -43,10 +51,14 @@ export function AdminStudio() {
         setCategories(store.categories.length ? store.categories : [...CATEGORIES]);
         setCategoryIcons(store.categoryIcons ?? {});
         setCategoryShown(store.categoryShown ?? {});
-        setReady(true);
+        setStoreReady(true);
       } catch (err) {
         if (cancelled) return;
-        setForbidden(err instanceof Error ? err.message : "Access denied.");
+        if (sessionLoaded) {
+          setLoadError(err instanceof Error ? err.message : "Could not load studio data.");
+        } else {
+          setForbidden(err instanceof Error ? err.message : "Access denied.");
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -64,6 +76,26 @@ export function AdminStudio() {
     );
   }
   if (!ready) return <main className="grid min-h-svh place-items-center text-ivory-dim">Opening studio…</main>;
+  if (!storeReady) {
+    return (
+      <main className="min-h-svh bg-ink pb-16">
+        <header className="border-b border-hair">
+          <div className="wrap flex items-center justify-between gap-2 py-3 md:gap-4 md:py-5">
+            <Link to="/" className="btn btn-outline !min-h-10 !px-3 text-xs">
+              <Home className="size-4" /> Back to website
+            </Link>
+            <UserButton compact />
+          </div>
+        </header>
+        <div className="wrap mt-10 grid gap-4" aria-busy="true" aria-live="polite">
+          <p className="text-sm text-ivory-dim" role={loadError ? "alert" : "status"}>{loadError ? `Could not load studio data: ${loadError}. Refresh to try again.` : "Loading studio data…"}</p>
+          <div className="surface h-24 animate-pulse" />
+          <div className="surface h-48 animate-pulse" />
+          <div className="surface h-64 animate-pulse" />
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-svh bg-ink pb-16">
